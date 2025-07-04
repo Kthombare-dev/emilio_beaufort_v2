@@ -15,33 +15,20 @@ export const metadata = {
   description: "Luxury grooming products and philosophy by Emilio Beaufort.",
 };
 
-function ClientLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <Suspense>
-      <PageTransitionProgressBar />
-      <Navbar />
-      {children}
-      {/* <Footer /> */}
-      <Toaster />
-    </Suspense>
-  );
-}
-
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} bg-white text-gray-900 font-sans`}>
         <BagProvider>
-          <ClientLayout>
-            <main>
-              {children}
-            </main>
-          </ClientLayout>
+          <main>
+            {children}
+          </main>
         </BagProvider>
+        <Toaster />
       </body>
     </html>
   );

@@ -7,10 +7,17 @@ import { motion } from "framer-motion";
 import { api, Post } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getImageUrl } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+
 
 export default function JournalPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [imageError, setImageError] = useState<Record<string, boolean>>({});
+
+  // Get the default image URL from Supabase storage
+  const defaultImageUrl = getImageUrl('the-house', 'Cosmetics Banner.jpeg');
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -27,6 +34,35 @@ export default function JournalPage() {
     fetchPosts();
   }, []);
 
+  const handleImageError = (postId: string) => {
+    console.error(`Failed to load image for post ${postId}`);
+    setImageError(prev => ({ ...prev, [postId]: true }));
+  };
+
+  const getPostImage = (post: Post) => {
+    if (imageError[post.id]) {
+      return defaultImageUrl;
+    }
+    
+    if (post.featuredImageUrl) {
+      // If the featuredImageUrl is from Supabase storage, use getImageUrl
+      if (post.featuredImageUrl.includes('storage/v1/object')) {
+        try {
+          const url = new URL(post.featuredImageUrl);
+          const path = url.pathname.split('/public/')[1];
+          if (path) {
+            return getImageUrl('the-house', decodeURIComponent(path));
+          }
+        } catch (error) {
+          console.error('Error parsing featured image URL:', error);
+        }
+      }
+      return post.featuredImageUrl;
+    }
+    
+    return defaultImageUrl;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -37,12 +73,12 @@ export default function JournalPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-6 py-24">
+      <div className="max-w-7xl mx-auto px-6 py-12">
         <motion.div
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="text-center mb-16"
+          className="text-center mb-8"
         >
           <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-8">
             Journal
@@ -53,7 +89,7 @@ export default function JournalPage() {
         </motion.div>
 
         {/* Blog Posts Grid */}
-        <div className="mt-16">
+        <div className="mt-8">
           {posts.length > 0 ? (
             <div className="grid gap-10 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {posts.map((post) => (
@@ -67,10 +103,13 @@ export default function JournalPage() {
                     <Card className="overflow-hidden hover:shadow-md transition cursor-pointer group">
                       <div className="relative aspect-[4/3]">
                         <Image
-                          src={post.featuredImageUrl || 'Cosmetics_Banner.jpeg'}
+                          src={getPostImage(post)}
                           alt={post.title}
                           fill
                           className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          priority
+                          onError={() => handleImageError(post.id)}
                         />
                       </div>
                       <CardContent className="p-5">
