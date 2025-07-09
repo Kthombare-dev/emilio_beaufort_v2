@@ -40,6 +40,7 @@ Create a `.env.local` file in the root directory with:
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key_here
 CLERK_SECRET_KEY=your_clerk_secret_key_here
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_your_key_id_here
 ```
 
 3. Run the development server:
