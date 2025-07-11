@@ -4,55 +4,82 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { getImageUrl } from "@/lib/supabase";
+import { getImageUrl, getProducts } from "@/lib/supabase";
+
+interface DisplayProduct {
+  title: string;
+  description: string;
+  image: string;
+  price?: number;
+  id: string;
+}
 
 export default function ExclusiveProductsMarquee() {
-  const exclusiveProducts = [
-    {
-      title: "Luminous Silk Foundation",
-      description: "A weightless, buildable foundation for a radiant, flawless finish.",
-      image: getImageUrl("product-images", "cosmetic5.jpg"),
-    },
-    {
-      title: "Matte Lipstick",
-      description: "Intense color payoff with a soft, hydrating matte finish.",
-      image: getImageUrl("product-images", "cosmetic9.jpg"),
-    },
-    {
-      title: "Radiance Glow Serum",
-      description: "Revitalize your skin with our luxurious, illuminating serum.",
-      image: getImageUrl("product-images", "cosmetic6.jpg"),
-    },
-    {
-      title: "Radiance Sunscreen",
-      description: "Revitalize your skin with our luxurious, illuminating sunscreen.",
-      image: getImageUrl("product-images", "cosmetic10.jpg"),
-    },
-  ];
-  const marqueeProducts = [...exclusiveProducts, ...exclusiveProducts]; // repeat twice for seamless loop
+  const [exclusiveProducts, setExclusiveProducts] = useState<DisplayProduct[]>([]);
+  const [loading, setLoading] = useState(true);
   const fallbackImage = getImageUrl("product-images", "cosmetics1.jpg");
-  const [imageErrors, setImageErrors] = useState<{[key: string]: boolean}>({});
+  const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollInterval = useRef<NodeJS.Timeout | null>(null);
   const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
 
-  // Function to handle image load error
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const products = await getProducts();
+        const featuredProducts = products
+          .filter(product => product.featured || product.in_stock)
+          .slice(0, 6)
+          .map(product => ({
+            id: product.id,
+            title: product.name,
+            description: product.description || '',
+            image: product.main_image_url || fallbackImage,
+            price: product.price
+          }));
+
+        if (featuredProducts.length < 4) {
+          const additionalProducts = products
+            .filter(product => !featuredProducts.find(fp => fp.id === product.id))
+            .slice(0, 4 - featuredProducts.length)
+            .map(product => ({
+              id: product.id,
+              title: product.name,
+              description: product.description || '',
+              image: product.main_image_url || fallbackImage,
+              price: product.price
+            }));
+
+          setExclusiveProducts([...featuredProducts, ...additionalProducts]);
+        } else {
+          setExclusiveProducts(featuredProducts);
+        }
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+        setExclusiveProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  const marqueeProducts = [...exclusiveProducts, ...exclusiveProducts];
+
   const handleImageError = (idx: number, productTitle: string) => {
     console.error(`Failed to load image for product: ${productTitle}`);
     setImageErrors(prev => ({ ...prev, [idx]: true }));
   };
 
-  // Scroll handler
   const scrollByAmount = (amount: number) => {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: amount, behavior: 'smooth' });
     }
-    // Pause auto-scroll for 3 seconds after manual interaction
     setIsAutoScrollPaused(true);
     setTimeout(() => setIsAutoScrollPaused(false), 3000);
   };
 
-  // Auto-scroll effect
   useEffect(() => {
     if (!scrollRef.current) return;
     if (autoScrollInterval.current) clearInterval(autoScrollInterval.current);
@@ -60,7 +87,6 @@ export default function ExclusiveProductsMarquee() {
       autoScrollInterval.current = setInterval(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollBy({ left: 2, behavior: 'smooth' });
-          // Loop back to start if near the end
           if (
             scrollRef.current.scrollLeft + scrollRef.current.offsetWidth >=
             scrollRef.current.scrollWidth - 10
@@ -68,16 +94,32 @@ export default function ExclusiveProductsMarquee() {
             scrollRef.current.scrollLeft = 0;
           }
         }
-      }, 16); // ~60fps
+      }, 16);
     }
     return () => {
       if (autoScrollInterval.current) clearInterval(autoScrollInterval.current);
     };
   }, [isAutoScrollPaused]);
 
-  // Track hover state to pause auto-scroll
   const handleCardMouseEnter = () => setIsAutoScrollPaused(true);
   const handleCardMouseLeave = () => setIsAutoScrollPaused(false);
+
+  if (loading) {
+    return (
+      <div className="w-full py-16 bg-premium overflow-hidden relative">
+        <h2 className="text-4xl font-serif font-bold text-premium mb-10 text-center">
+          Most Exclusive Collection
+        </h2>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-premium"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (exclusiveProducts.length === 0) {
+    return null;
+  }
 
   return (
     <div className="w-full py-16 bg-premium overflow-hidden relative">
@@ -85,7 +127,6 @@ export default function ExclusiveProductsMarquee() {
         Most Exclusive Collection
       </h2>
       <div className="relative overflow-hidden">
-        {/* Left Arrow */}
         <button
           className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white border border-premium rounded-full p-2 shadow transition-all"
           onClick={() => scrollByAmount(-350)}
@@ -93,7 +134,6 @@ export default function ExclusiveProductsMarquee() {
         >
           <ArrowLeft className="w-6 h-6 text-premium" />
         </button>
-        {/* Right Arrow */}
         <button
           className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white border border-premium rounded-full p-2 shadow transition-all"
           onClick={() => scrollByAmount(350)}
@@ -109,7 +149,7 @@ export default function ExclusiveProductsMarquee() {
           <div className="flex gap-8 min-w-max">
             {marqueeProducts.map((product, idx) => (
               <div
-                key={idx}
+                key={`${product.id}-${idx}`}
                 className="min-w-[300px] max-w-xs bg-white rounded-xl shadow-lg overflow-hidden flex-shrink-0 border border-premium flex flex-col transition-transform duration-300 hover:scale-105 cursor-pointer"
                 onMouseEnter={handleCardMouseEnter}
                 onMouseLeave={handleCardMouseLeave}
@@ -137,6 +177,9 @@ export default function ExclusiveProductsMarquee() {
                     {product.title}
                   </h3>
                   <p className="text-gray-700 text-base">{product.description}</p>
+                  {product.price && (
+                    <p className="text-xl font-semibold text-premium">₹{product.price.toFixed(2)}</p>
+                  )}
                   <div className="flex-1" />
                   <button className="mt-2 bg-black text-white px-4 py-2 rounded-lg font-semibold hover:bg-white hover:text-black border border-black transition-colors duration-200">
                     Add To Bag

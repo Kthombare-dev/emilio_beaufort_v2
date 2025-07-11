@@ -1,12 +1,13 @@
 import "./globals.css";
 import { Inter, Playfair_Display } from "next/font/google";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "sonner";
 import PageTransitionProgressBar from "@/components/PageTransitionProgressBar";
-import { Navbar } from "@/components/Navbar";
+import ConditionalNavbar from "@/components/ConditionalNavbar";
 // import { Footer } from "@/components/Footer";
 import { Suspense } from "react";
 import { BagProvider } from '@/components/BagContext';
 import { Toaster as ReactHotToastToaster } from 'react-hot-toast';
+import ConditionalAutoFeedback from '@/components/ConditionalAutoFeedback'; // <-- From main
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair" });
@@ -33,10 +34,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} bg-white text-gray-900 font-sans`}>
         <BagProvider>
-          <Navbar />
+          <ConditionalNavbar />
           <main>
             {children}
           </main>
+          <ConditionalAutoFeedback /> {/* <-- From main */}
         </BagProvider>
         <ReactHotToastToaster position="top-center" reverseOrder={false} />
       </body>
