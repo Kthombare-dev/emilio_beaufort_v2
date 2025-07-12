@@ -391,6 +391,7 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
               </Form>
             </div>
           </>
+          
         ) : (
           <div className="flex flex-col items-center py-8 text-center">
             <div className="text-4xl mb-4">🎉</div>
