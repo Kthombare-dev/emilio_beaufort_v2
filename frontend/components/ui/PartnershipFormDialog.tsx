@@ -143,11 +143,11 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
 
     try {
       const submissionData = {
-        full_name: data.fullName,
+        name: data.fullName,
         email: data.email,
         company: data.company,
         message: data.message,
-        inquiry_type: data.inquiryType === "other" ? data.otherInquiryType! : data.inquiryType,
+        inquiryType: data.inquiryType === "other" ? data.otherInquiryType! : data.inquiryType,
       };
 
       console.log('Preparing to submit data:', submissionData);
@@ -169,12 +169,24 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
       setSubmittedName(data.fullName);
       setIsSuccess(true);
       form.reset();
+      
+      // Show success toast
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <p className="font-medium">Inquiry submitted successfully!</p>
+          <p className="text-sm text-gray-600">We'll get back to you soon.</p>
+        </div>
+      );
     } catch (error) {
       console.error("Detailed submission error:", error);
+      
+      // Show more specific error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast.error(
         <div className="flex flex-col gap-1">
           <p className="font-medium">Failed to submit inquiry</p>
-          <p className="text-sm text-gray-600">Please try again. If the problem persists, contact support.</p>
+          <p className="text-sm text-gray-600">{errorMessage}</p>
+          <p className="text-xs text-gray-500">Please try again or contact support if the problem persists.</p>
         </div>
       );
     } finally {
@@ -409,5 +421,5 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
         )}
       </DialogContent>
     </Dialog>
-   );
+  );
 }
