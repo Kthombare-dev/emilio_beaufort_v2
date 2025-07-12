@@ -409,5 +409,5 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
         )}
       </DialogContent>
     </Dialog>
-  );
+   );
 }
