@@ -3,31 +3,75 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetTrigger, 
-  SheetClose,
+import PartnershipFormDialog from './ui/PartnershipFormDialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
   SheetHeader,
   SheetTitle
 } from '@/components/ui/sheet';
 import { Menu, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
+// --- Sub-components --- //
+type LogoProps = {
+  isHomePage: boolean;
+  isScrolled: boolean;
+  onClick: () => void;
+};
 
+function Logo({ isHomePage, isScrolled, onClick }: LogoProps) {
+  return (
+    <motion.div
+      className={`
+        left-4 md:left-8
+        top-[0px] md:top-[0px]
+        heading-premium text-2xl cursor-pointer transition-colors duration-300
+        ${isHomePage && !isScrolled ? 'text-white' : 'text-premium'}
+      `}
+      style={{ position: "relative" }} // not fixed!
+      onClick={onClick}
+      whileHover={{ scale: 1.05 }}
+      transition={{ duration: 0.2 }}
+    >
+      Emilio Beaufort
+    </motion.div>
+  );
+}
+
+type PartnerButtonProps = {
+  onClick: () => void;
+  className?: string;
+  size?: "sm" | "md" | "lg";
+};
+
+function PartnerButton({ onClick, className = "", size = "sm" }: PartnerButtonProps) {
+  return (
+    <Button
+      onClick={onClick}
+      className={`btn-primary-premium ${className}`}
+      size={size}
+    >
+      Partner With Us
+    </Button>
+  );
+}
+
+// --- Main Navbar --- //
 const navItems = [
   { name: 'Philosophy', href: '#philosophy' },
   { name: 'The House', href: '#house' },
   { name: 'Journal', href: '#journal' },
   { name: 'Meet The Brains', href: '#team' },
-  {name: 'Products', href: '/products'},
-  // { name: 'Careers', href: '/careers' },
-  // { name: 'Alliances', href: '#alliances' },
+  { name: 'Products', href: '/products' },
 ];
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [isPartnerDialogOpen, setIsPartnerDialogOpen] = useState(false);
+
   const pathname = usePathname();
   const router = useRouter();
   const isHomePage = pathname === '/';
@@ -36,12 +80,11 @@ export function Navbar() {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
-
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Effect to handle scrolling when redirected with a hash
+  // Effect to handle scrolling to anchor when on home
   useEffect(() => {
     if (isHomePage && window.location.hash) {
       const element = document.querySelector(window.location.hash);
@@ -85,48 +128,40 @@ export function Navbar() {
     }
   };
 
-  const handlePartnerClick = async () => {
+  const handlePartnerClick = () => {
     setIsOpen(false);
-    
-    if (isHomePage) {
-      const alliancesSection = document.querySelector('#alliances');
-      if (alliancesSection) {
-        alliancesSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    } else {
-      await router.push('/#alliances');
-    }
+    setIsPartnerDialogOpen(true);
   };
 
   return (
-    <motion.nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-premium ${
-        isScrolled 
-          ? 'bg-white/95 backdrop-blur-md border-b border-premium shadow-premium' 
-          : 'bg-transparent'
-      }`}
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-    >
-      <div className="container-premium">
-        <div className="flex items-center justify-between h-14">
-          {/* Logo */}
-          <motion.div
-            className={`heading-premium text-2xl cursor-pointer transition-colors duration-300 ${isHomePage && !isScrolled ? 'text-white' : 'text-premium'}`}
-            onClick={handleLogoClick}
-            whileHover={{ scale: 1.05 }}
-            transition={{ duration: 0.2 }}
-          >
-            Emilio Beaufort
-          </motion.div>
+    <>
+      {/* Nav bar, content centered, logo always visible */}
+      <motion.nav
+        className={`fixed top-0 left-0 right-0 z-40 transition-premium ${
+          isScrolled
+            ? 'bg-white/95 backdrop-blur-md border-b border-premium shadow-premium'
+            : 'bg-transparent'
+        }`}
+        style={{ height: 56 }} // 56px = h-14
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
+        <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between h-14 relative">
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-12">
+          {/* Logo always visible */}
+          <div className="flex-shrink-0 flex items-center">
+            <Logo isHomePage={isHomePage} isScrolled={isScrolled} onClick={handleLogoClick} />
+          </div>
+
+          {/* Desktop: nav links centered */}
+          <div className="hidden md:flex items-center gap-12 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
             {navItems.map((item, index) => (
               <motion.button
                 key={item.name}
-                className={`font-sans-medium transition-premium relative group ${isHomePage && !isScrolled ? 'text-white hover:text-gold' : 'text-premium hover:text-gold'}`}
+                className={`font-sans-medium transition-premium relative group ${
+                  isHomePage && !isScrolled ? 'text-white hover:text-gold' : 'text-premium hover:text-gold'
+                }`}
                 onClick={() => handleNavigation(item.href)}
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -139,39 +174,28 @@ export function Navbar() {
             ))}
           </div>
 
-          {/* CTA Button */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
-            className="hidden md:block"
-          >
-            <Button
-              onClick={handlePartnerClick}
-              className="btn-primary-premium"
-              size="sm"
-            >
-              Partner With Us
-            </Button>
-          </motion.div>
+          {/* Desktop: CTA button right */}
+          <div className="flex-shrink-0 hidden md:flex items-center">
+            <PartnerButton onClick={handlePartnerClick} />
+          </div>
 
-          {/* Mobile Navigation */}
-          <div className="md:hidden">
+          {/* Mobile: Hamburger menu right */}
+          <div className="flex-shrink-0 flex items-center md:hidden">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <button className={`transition-premium ${isHomePage && !isScrolled ? 'text-white hover:text-gold' : 'text-premium hover:text-gold'}`}>
+                <button className={`transition-premium ml-3 ${isHomePage && !isScrolled ? 'text-white hover:text-gold' : 'text-premium hover:text-gold'}`}>
                   <Menu className="w-6 h-6" />
                 </button>
               </SheetTrigger>
-              <SheetContent 
-                side="right" 
+              <SheetContent
+                side="right"
                 className="w-[300px] sm:w-[400px] bg-white border-l border-premium p-0"
                 hideCloseButton
               >
                 <SheetHeader className="p-6 border-b border-gray-100">
                   <div className="flex items-center justify-between">
                     <SheetTitle className="font-serif text-xl">Menu</SheetTitle>
-                    <button 
+                    <button
                       onClick={() => setIsOpen(false)}
                       className="text-gray-500 hover:text-gray-900 transition-premium rounded-full hover:bg-gray-100 p-1"
                     >
@@ -189,21 +213,19 @@ export function Navbar() {
                       {item.name}
                     </button>
                   ))}
-                  <Button
-                    onClick={handlePartnerClick}
-                    className="btn-primary-premium w-full mt-8 py-6"
-                  >
-                    Partner With Us
-                  </Button>
+                  <PartnerButton onClick={handlePartnerClick} className="w-full mt-8 py-6" />
                 </nav>
               </SheetContent>
             </Sheet>
           </div>
         </div>
-      </div>
-    </motion.nav>
+      </motion.nav>
+
+      {/* Modal dialog */}
+      <PartnershipFormDialog
+        isOpen={isPartnerDialogOpen}
+        onClose={() => setIsPartnerDialogOpen(false)}
+      />
+    </>
   );
-} 
-
-
-
+}

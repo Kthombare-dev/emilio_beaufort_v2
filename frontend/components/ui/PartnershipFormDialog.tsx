@@ -15,46 +15,40 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
-import { Toaster, toast } from "sonner";
-import BootstrapDropdown from "./BootstrapDropdown";
+import { toast } from "sonner";
 
-const formSchema = z.object({
-  full_name: z
-    .string()
-    .min(2, "Full name must be at least 2 characters")
-    .regex(/^[A-Za-z\s]+$/, "Special characters and numbers are not allowed"),
-
-  company: z
-    .string()
-    .min(2, "Company name must be at least 2 characters"),
-
-  email: z
-    .string()
-    .email("Please enter a valid email address")
-    .refine((val) => val.endsWith("@gmail.com"), {
-      message: "Only Gmail addresses ending with @gmail.com are allowed",
-    }),
-
-  inquiryType: z.enum(["supplier", "distributor", "other"]),
-
-  otherInquiryType: z
-    .string()
-    .min(2, "Please specify your inquiry type")
-    .optional(),
-
-  message: z
-    .string()
-    .min(10, "Message must be at least 10 characters"),
-});
+// =============
+// Zod Schema
+// =============
+const formSchema = z
+  .object({
+    full_name: z
+      .string()
+      .min(2, "Full name must be at least 2 characters")
+      .regex(/^[A-Za-z\s]+$/, "Special characters and numbers are not allowed"),
+    company: z.string().min(2, "Company name must be at least 2 characters"),
+    email: z
+      .string()
+      .email("Please enter a valid email address")
+      .refine((val) => val.endsWith("@gmail.com"), {
+        message: "Only Gmail addresses ending with @gmail.com are allowed",
+      }),
+    inquiryType: z.enum(["supplier", "distributor", "other"]),
+    otherInquiryType: z.string().optional(),
+    message: z.string().min(10, "Message must be at least 10 characters"),
+  })
+  // Require `otherInquiryType` when 'other'
+  .refine(
+    (data) =>
+      data.inquiryType !== "other" ||
+      (data.otherInquiryType && data.otherInquiryType.trim().length >= 2),
+    {
+      message: "Please specify your inquiry type",
+      path: ["otherInquiryType"],
+    }
+  );
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -63,8 +57,7 @@ interface PartnershipFormDialogProps {
   onClose: () => void;
 }
 
-// Add cache helper
-const CACHE_KEY = 'partnership_inquiries';
+const CACHE_KEY = "partnership_inquiries";
 
 function saveToCache(data: any) {
   try {
@@ -73,11 +66,14 @@ function saveToCache(data: any) {
     inquiries.push({ ...data, timestamp: new Date().toISOString() });
     localStorage.setItem(CACHE_KEY, JSON.stringify(inquiries));
   } catch (error) {
-    console.error('Error saving to cache:', error);
+    console.error("Error saving to cache:", error);
   }
 }
 
-export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFormDialogProps) {
+export default function PartnershipFormDialog({
+  isOpen,
+  onClose,
+}: PartnershipFormDialogProps) {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     mode: "onChange",
@@ -91,55 +87,12 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
     },
   });
 
-  // Watch specific form fields
-  const full_name = form.watch("full_name");
-  const company = form.watch("company");
-  const email = form.watch("email");
-  const inquiryType = form.watch("inquiryType");
-  const otherInquiryType = form.watch("otherInquiryType");
-  const message = form.watch("message");
-  
-  const [isFormValid, setIsFormValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedName, setSubmittedName] = useState("");
 
-  // Validate form whenever fields change
-  useEffect(() => {
-    const validateForm = () => {
-      const hasRequiredFields = 
-        Boolean(full_name?.trim()) &&
-        Boolean(company?.trim()) &&
-        Boolean(email?.trim()) &&
-        Boolean(message?.trim()) &&
-        Boolean(inquiryType);
-
-      const hasOtherType = inquiryType === "other";
-      const isOtherValid = !hasOtherType || (hasOtherType && (otherInquiryType?.trim()?.length ?? 0) >= 2);
-
-      const isEmailValid = Boolean(email?.trim()?.endsWith("@gmail.com"));
-
-      const isValid = hasRequiredFields && isOtherValid && isEmailValid;
-      console.log('Form validation state:', {
-        hasRequiredFields,
-        isOtherValid,
-        isEmailValid,
-        isValid
-      });
-      
-      setIsFormValid(isValid);
-    };
-
-    validateForm();
-  }, [full_name, company, email, inquiryType, otherInquiryType, message]);
-
   const onSubmit = async (data: FormData) => {
-    if (!isFormValid || isSubmitting) {
-      console.log('Form submission blocked:', { isFormValid, isSubmitting });
-      return;
-    }
-
-    console.log('Form submission started with data:', data);
+    if (!form.formState.isValid || isSubmitting) return;
     setIsSubmitting(true);
 
     try {
@@ -148,46 +101,38 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
         email: data.email,
         company: data.company,
         message: data.message,
-        inquiry_type: data.inquiryType,
+        inquiry_type:
+          data.inquiryType === "other"
+            ? data.otherInquiryType
+            : data.inquiryType,
       };
 
-      console.log('Preparing to submit data:', submissionData);
+      saveToCache(submissionData);
 
-      // Save to cache first
-      try {
-        saveToCache(submissionData);
-        console.log('Data saved to cache successfully');
-      } catch (cacheError) {
-        console.error('Cache save error:', cacheError);
-      }
+      await api.submitPartnershipInquiry(submissionData);
 
-      // Make the API call
-      console.log('Making API call...');
-      const response = await api.submitPartnershipInquiry(submissionData);
-      console.log('API Response:', response);
-
-      // Show success message
       setSubmittedName(data.full_name);
       setIsSuccess(true);
       form.reset();
-      
-      // Show success toast
+
       toast.success(
         <div className="flex flex-col gap-1">
           <p className="font-medium">Inquiry submitted successfully!</p>
-          <p className="text-sm text-gray-600">We'll get back to you soon.</p>
+          <p className="text-sm text-gray-600">
+            We'll get back to you soon.
+          </p>
         </div>
       );
-    } catch (error) {
-      console.error("Detailed submission error:", error);
-      
-      // Show more specific error message
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    } catch (error: any) {
       toast.error(
         <div className="flex flex-col gap-1">
           <p className="font-medium">Failed to submit inquiry</p>
-          <p className="text-sm text-gray-600">{errorMessage}</p>
-          <p className="text-xs text-gray-500">Please try again or contact support if the problem persists.</p>
+          <p className="text-sm text-gray-600">
+            {error?.message || "Unknown error occurred"}
+          </p>
+          <p className="text-xs text-gray-500">
+            Please try again or contact support if the problem persists.
+          </p>
         </div>
       );
     } finally {
@@ -207,44 +152,21 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
         {!isSuccess ? (
           <>
             <DialogHeader>
-              <DialogTitle className="text-2xl font-serif">Partner With Us</DialogTitle>
+              <DialogTitle className="text-2xl font-serif">
+                Partner With Us
+              </DialogTitle>
             </DialogHeader>
-            
             <div className="mt-4">
               <p className="text-gray-600 mb-6">
                 Join our network of premium partners and help us bring luxury grooming
                 to discerning customers worldwide.
               </p>
-
               <Form {...form}>
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    console.log('Form submit event triggered');
-                    
-                    try {
-                      if (isFormValid && !isSubmitting) {
-                        console.log('Form is valid and not submitting, proceeding with submission');
-                        
-                        const formData = form.getValues();
-                        console.log('Form data:', formData);
-                        
-                        await onSubmit(formData);
-                      } else {
-                        console.log('Form validation failed or already submitting:', { 
-                          isFormValid, 
-                          isSubmitting,
-                          formData: form.getValues(),
-                          formErrors: form.formState.errors
-                        });
-                      }
-                    } catch (error) {
-                      console.error('Error during form submission:', error);
-                    }
-                  }} 
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-4"
                 >
-                  {/* Full Name Field with live hint */}
+                  {/* Full Name */}
                   <FormField
                     control={form.control}
                     name="full_name"
@@ -270,8 +192,7 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                       );
                     }}
                   />
-
-                  {/* Company Field */}
+                  {/* Company */}
                   <FormField
                     control={form.control}
                     name="company"
@@ -285,13 +206,13 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                       </FormItem>
                     )}
                   />
-
-                  {/* Email Field with live hint */}
+                  {/* Email */}
                   <FormField
                     control={form.control}
                     name="email"
                     render={({ field }) => {
-                      const isNotGmail = field.value && !field.value.endsWith("@gmail.com");
+                      const isNotGmail =
+                        field.value && !field.value.endsWith("@gmail.com");
                       return (
                         <FormItem>
                           <FormLabel>Official Mail</FormLabel>
@@ -312,7 +233,6 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                       );
                     }}
                   />
-
                   {/* Inquiry Type */}
                   <FormField
                     control={form.control}
@@ -335,8 +255,7 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                       </FormItem>
                     )}
                   />
-
-                  {/* Other Inquiry Type - Only shown when "other" is selected */}
+                  {/* Other Inquiry Type */}
                   {form.watch("inquiryType") === "other" && (
                     <FormField
                       control={form.control}
@@ -345,14 +264,16 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                         <FormItem>
                           <FormLabel>Specify Inquiry Type</FormLabel>
                           <FormControl>
-                            <Input placeholder="Please specify your inquiry type" {...field} />
+                            <Input
+                              placeholder="Please specify your inquiry type"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   )}
-
                   {/* Message */}
                   <FormField
                     control={form.control}
@@ -371,12 +292,11 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
                       </FormItem>
                     )}
                   />
-
-                  {/* Submit Button: enabled only if form is valid and not submitting */}
+                  {/* Submit */}
                   <Button
                     type="submit"
                     className="w-full bg-accent hover:bg-accent/90 transition-colors"
-                    disabled={!isFormValid || isSubmitting}
+                    disabled={!form.formState.isValid || isSubmitting}
                   >
                     {isSubmitting ? (
                       <div className="flex items-center gap-2">
@@ -391,28 +311,28 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
               </Form>
             </div>
           </>
-          
         ) : (
           <div className="flex flex-col items-center py-8 text-center">
             <div className="text-4xl mb-4">🎉</div>
             <h2 className="text-2xl font-serif mb-2">Thank You!</h2>
-            <div className="text-xl font-medium mb-4">
-              {submittedName} ✨
-            </div>
+            <div className="text-xl font-medium mb-4">{submittedName} ✨</div>
             <div className="text-gray-600 mb-6">
-              Your inquiry has been successfully submitted.<br/>
+              Your inquiry has been successfully submitted.<br />
               We'll get back to you soon!
             </div>
-            <div className="flex gap-2 text-2xl mb-6">
-              🌟 🎯 💫
-            </div>
-
-            <Button onClick={() => window.open("https://cal.com/emiliocosmetics/15min", "_blank")}
-            className="bg-accent hover:bg-accent/90 transition-colors m-1">
-                Book a Meet
+            <div className="flex gap-2 text-2xl mb-6">🌟 🎯 💫</div>
+            <Button
+              onClick={() =>
+                window.open(
+                  "https://cal.com/emiliocosmetics/15min",
+                  "_blank"
+                )
+              }
+              className="bg-accent hover:bg-accent/90 transition-colors m-1"
+            >
+              Book a Meet
             </Button>
-            
-            <Button 
+            <Button
               onClick={handleClose}
               className="bg-accent hover:bg-accent/90 transition-colors"
             >
@@ -422,5 +342,57 @@ export default function PartnershipFormDialog({ isOpen, onClose }: PartnershipFo
         )}
       </DialogContent>
     </Dialog>
-  );
+  );
+}
+
+// --- Export CSV utility ---
+export function exportInquiriesToCSV() {
+  try {
+    const inquiriesJSON = localStorage.getItem(CACHE_KEY);
+    if (!inquiriesJSON) {
+      toast.error("No inquiries found to export.");
+      return;
+    }
+    const inquiries = JSON.parse(inquiriesJSON);
+    if (!Array.isArray(inquiries) || inquiries.length === 0) {
+      toast.error("No inquiries found to export.");
+      return;
+    }
+    const headers = Object.keys(inquiries[0]);
+    const csvRows = [
+      headers.join(","),
+      ...inquiries.map((inquiry: any) =>
+        headers
+          .map((header) => {
+            let value = inquiry[header] ?? "";
+            if (typeof value === "string") {
+              value = value.replace(/"/g, '""');
+              if (
+                value.includes(",") ||
+                value.includes('"') ||
+                value.includes("\n")
+              ) {
+                value = `"${value}"`;
+              }
+            }
+            return value;
+          })
+          .join(",")
+      ),
+    ];
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `partnership_inquiries_${new Date().toISOString()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Inquiries exported as CSV!");
+  } catch (error) {
+    console.error("Error exporting inquiries to CSV:", error);
+    toast.error("Failed to export inquiries.");
+  }
 }
