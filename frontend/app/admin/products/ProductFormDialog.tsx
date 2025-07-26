@@ -1,1328 +1,925 @@
-"use client";
-import { Label } from "@/components/ui/label";
-import { v4 as uuidv4 } from 'uuid';
-import TextField from '@mui/material/TextField';
-
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { supabase } from '@/lib/supabase';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Product } from "@/lib/api";
+import { Product as SupabaseProduct, getProducts, isCosmeticsProduct, isHairExtensionsProduct } from "@/lib/supabase";
+import Image from "next/image";
+import { X, Star, Package, ArrowLeft, ArrowRight, CheckCircle, Sparkles, Award, MessageCircle, Info, ShoppingBag, Heart, Share2, Shield, RotateCcw, Headphones, Box, Mail, Phone } from "lucide-react";
+import confetti from 'canvas-confetti';
+import { useBag } from '@/components/BagContext';
+import { useState, useEffect } from 'react';
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { productCardUtils } from '@/lib/utils';
+import { getHairExtensionById } from "@/lib/firebase";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import BootstrapDropdown from '@/components/ui/BootstrapDropdown';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Upload, 
-  X, 
-  ImageIcon, 
-  Loader2,
-  Star,
-  Package,
-  DollarSign,
-  Sparkles,
-  Waves,
-  Plus
-} from 'lucide-react';
-import { uploadProductImage, uploadMultipleImages, deleteProductImage, } from '@/lib/supabase';
-import { 
-  createProduct, 
-  updateProduct, 
-  // Product, // Removed Product import
-  
-} from '@/lib/supabase';
-import { toast } from 'sonner';
-import { Resolver } from 'react-hook-form';
-
-// 1. Import Firestore and Storage helpers from lib/firebase.ts
-import { firestore, storage } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
-
-import { productSchema, ProductFormData } from './productFormTypes';
-
-// Define Variant type locally if not imported from supabase
-interface Variant {
-  id: string;
-  product_id: string;
-  weight: number;
-  length: number;
-  price: number;
-  discount_price: number | null;
-  colors?: string[]; // <-- add this
-  topper_size?: string; // <-- added
-}
-
-function isCosmeticsProduct(product: ProductFormData): product is ProductFormData {
-  return product.category === 'cosmetics';
-}
-function isHairExtensionsProduct(product: ProductFormData): product is ProductFormData {
-  return product.category === 'hair-extension';
-}
-
-interface ProductFormDialogProps {
-  open: boolean;
-  product: ProductFormData | null;
-  selectedCategory?: string;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const categoryOptions = [
-  { value: 'cosmetics', label: 'Cosmetics' },
-  { value: 'hair-extension', label: 'Hair Extension' },
-];
-
-const statusOptions = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'published', label: 'Published' },
-  { value: 'archived', label: 'Archived' },
-];
-
-const skinTypeOptions = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'dry', label: 'Dry' },
-  { value: 'oily', label: 'Oily' },
-  { value: 'combination', label: 'Combination' },
-  { value: 'sensitive', label: 'Sensitive' },
-  { value: 'all-types', label: 'All Skin Types' },
-];
-
-const hairTypeOptions = [
-  { value: 'remy-human', label: 'Remy Human Hair' },
-  { value: 'virgin-human', label: 'Virgin Human Hair' },
-  { value: 'human-hair', label: 'Human Hair' },
-  { value: 'synthetic', label: 'Synthetic Hair' },
-  { value: 'heat-friendly-synthetic', label: 'Heat-Friendly Synthetic' },
-];
-
-const hairTextureOptions = [
-  { value: 'straight', label: 'Straight' },
-  { value: 'body-wave', label: 'Body Wave' },
-  { value: 'loose-wave', label: 'Loose Wave' },
-  { value: 'deep-wave', label: 'Deep Wave' },
-  { value: 'curly', label: 'Curly' },
-  { value: 'kinky-curly', label: 'Kinky Curly' },
-];
-
-const installationMethodOptions = [
-  { value: 'clip-in', label: 'Clip-In' },
-  { value: 'tape-in', label: 'Tape-In' },
-  { value: 'sew-in', label: 'Sew-In' },
-  { value: 'micro-ring', label: 'Micro Ring' },
-  { value: 'fusion', label: 'Fusion/Keratin' },
-  { value: 'halo', label: 'Halo' },
-];
-
-// Add color options for hair extensions
 const hairColorOptions = [
   {
-    name: 'Natural Black',
-    value: 'natural-black',
-    image: 'https://m.media-amazon.com/images/I/616-QJ5oHML._UF1000,1000_QL80_.jpg',
+    name: "Natural Black",
+    value: "natural-black",
+    image: "https://m.media-amazon.com/images/I/616-QJ5oHML._UF1000,1000_QL80_.jpg",
   },
   {
-    name: 'Dark Brown',
-    value: 'dark-brown',
-    image: 'https://www.shutterstock.com/image-photo/brown-hair-closeup-background-womens-600nw-2220526961.jpg',
+    name: "Dark Brown",
+    value: "dark-brown",
+    image:
+      "https://www.shutterstock.com/image-photo/brown-hair-closeup-background-womens-600nw-2220526961.jpg",
   },
   {
-    name: 'Medium Brown',
-    value: 'medium-brown',
-    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTUQpHBJjuNF7ggbA-UKOQXcZuhm7s1EGuFdw&s',
+    name: "Medium Brown",
+    value: "medium-brown",
+    image:
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTUQpHBJjuNF7ggbA-UKOQXcZuhm7s1EGuFdw&s",
   },
   {
-    name: 'Light Brown',
-    value: 'light-brown',
-    image: 'https://www.shutterstock.com/image-photo/blond-hair-closeup-background-womens-260nw-2282714539.jpg',
+    name: "Light Brown",
+    value: "light-brown",
+    image:
+      "https://www.shutterstock.com/image-photo/blond-hair-closeup-background-womens-260nw-2282714539.jpg",
   },
   {
-    name: 'Auburn',
-    value: 'auburn',
-    image: 'https://lh3.googleusercontent.com/VT4q6dvB-Bt8jnXQXd1NhZ9i4tpIHmBWKE4g7NUi69vdFmfuSjfJ5cWadyr5pFbOR-IYxYP_IwYN5CsWbOXnwA_VCCOCxEFf3JS_9MCl=w360-rw',
+    name: "Auburn",
+    value: "auburn",
+    image:
+      "https://lh3.googleusercontent.com/VT4q6dvB-Bt8jnXQXd1NhZ9i4tpIHmBWKE4g7NUi69vdFmfuSjfJ5cWadyr5pFbOR-IYxYP_IwYN5CsWbOXnwA_VCCOCxEFf3JS_9MCl=w360-rw",
   },
 ];
 
-// Add a color swatch map for hair colors
-const hairColorSwatchMap: Record<string, string> = {
-  natural_black: '#232323',
-  dark_brown: '#4B2E19',
-  ombre: 'linear-gradient(90deg, #232323 0%, #FFD700 100%)', // example gradient
-  light_brown: '#A0522D',
-  highlight_27: '#E2B369',
-  burgundy: '#800020',
+
+
+// Types
+type ColorType = {
+  name: string;
+  value?: string;
+  image?: string;
+};
+type HairProduct = Product & {
+  variants: VariantType[];
 };
 
-// 1. Define a simple hair texture SVG as a React component at the top of the file:
-const HairTextureSVG = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ position: 'absolute', inset: 0 }}>
-    <path d="M3 20c2-4 4-4 6 0s4 4 6 0 4-4 6 0" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.35" />
-    <path d="M3 16c2-4 4-4 6 0s4 4 6 0 4-4 6 0" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
-  </svg>
-);
 
-// Helper to upload a file and return its download URL
-async function uploadImage(file: File, path: string): Promise<string> {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+type VariantType = {
+  id: string;
+  length: string;
+  topper_size: string;
+  price: number;
+  original_price?: number;
+  colors: { name: string }[];
+};
+
+interface ProductDetailDialogProps {
+  product: Product | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  showAddToCartButton?: boolean;
 }
 
-// Helper to delete an image by URL
-async function deleteImageByUrl(url: string): Promise<void> {
-  const storageRef = ref(storage, url);
-  await deleteObject(storageRef);
-}
+export function ProductDetailDialog({
+  product,
+  open,
+  onOpenChange,
+  showAddToCartButton = true,
+}: ProductDetailDialogProps) {
+  const [detailedProduct, setDetailedProduct] = useState<SupabaseProduct | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-export default function ProductFormDialog({ open, product, selectedCategory, onClose, onSuccess }: ProductFormDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [mainImageUrl, setMainImageUrl] = useState<string>('');
-  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([]);
-  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
+  // Variant/Color state
+  const [variants, setVariants] = useState<VariantType[]>([]);
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [selectedColorIdx, setSelectedColorIdx] = useState(0);
+  const [quantity, setQuantity] = useState(1);
+  const [showContactDialog, setShowContactDialog] = useState(false);
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [showFullCare, setShowFullCare] = useState(false);
+  const [showFullIngredients, setShowFullIngredients] = useState(false);
+  const [showFullBenefits, setShowFullBenefits] = useState(false);
+  const [showAddedAlert, setShowAddedAlert] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
+  const [isWishlisted, setIsWishlisted] = useState(false);
 
-  // Correct useForm usage
-  const form = useForm<ProductFormData>({
-    resolver: zodResolver(productSchema) as Resolver<ProductFormData, any>,
-    defaultValues: productSchema.parse({}),
-  });
-  const { reset } = form;
 
-  const [variants, setVariants] = useState<Variant[]>([
-    {
-      id: uuidv4(),
-      product_id: '',
-      weight: 0,
-      length: 0,
-      price: 0,
-      discount_price: 0,
-      colors: [], // <-- initialize
-    },
-  ]);
-  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
 
-  // Update handleVariantChange to always store string values
-  const handleVariantChange = (index: number, field: keyof Variant, value: string) => {
-    const updated = [...variants];
-    updated[index] = { ...updated[index], [field]: value };
-    setVariants(updated);
-  };
-
-  const addNewVariant = () => {
-    setVariants([
-      ...variants,
-      {
-        id: uuidv4(),
-        weight: 0,
-        length: 0,
-        price: 0,
-        discount_price: 0,
-        product_id: '',
-        colors: [], // <-- initialize
-      },
-    ]);
-  };
-
-  const removeVariant = (index: number) => {
-    const updated = [...variants];
-    updated.splice(index, 1);
-    setVariants(updated);
-  };
-
-  const handleVariantSelect = (variantId: string) => {
-    setSelectedVariant(variantId);
-    const variant = variants.find(v => v.id === variantId);
-    if (variant) {
-      form.setValue('hair_weight', String(variant.weight));
-      form.setValue('hair_length', String(variant.length));
-      form.setValue('original_price', String(variant.price));
-    }
-  };
-
-  // Add a handler for color selection for a variant:
-  const handleVariantColorsChange = (index: number, selectedColors: string[]) => {
-    const updated = [...variants];
-    updated[index] = { ...updated[index], colors: selectedColors };
-    setVariants(updated);
-  };
-
-  // Remove all useEffect hooks that reset form or set image state, and replace with the following:
-
-useEffect(() => {
-  if (open) {
-    if (product) {
-      // Editing: prefill all fields from product
-      form.reset({
-        ...product,
-        main_image_url: product.main_image_url || '',
-        gallery_urls: product.gallery_urls || [],
-      });
-      setMainImageUrl(product.main_image_url || '');
-      setExistingGalleryUrls(product.gallery_urls || []);
-      setGalleryUrls([]);
-      setImagesToDelete([]);
-      // Prefill variants for hair-extension
-      if (product.category === 'hair-extension' && Array.isArray((product as any).variants)) {
-        setVariants(
-          (product as any).variants.map((v: any) => ({
-            ...v,
-            length: v.length !== undefined && v.length !== null ? String(v.length) : '',
-            price: v.price !== undefined && v.price !== null ? String(v.price) : '',
-            discount_price: v.discount_price !== undefined && v.discount_price !== null ? String(v.discount_price) : '',
-            topper_size: v.topper_size || '',
-            product_id: v.product_id || '',
-            colors: Array.isArray(v.colors) ? v.colors : [],
-            id: v.id || uuidv4(),
-          }))
-        );
-      } else {
-        setVariants([
-          {
-            id: uuidv4(),
-            product_id: '',
-            weight: 0,
-            length: 0,
-            price: 0,
-            discount_price: 0,
-            colors: [],
-          },
-        ]);
-      }
-    } else if (selectedCategory) {
-      // New product: use selectedCategory as initial value
-      form.reset({
-        ...productSchema.parse({}),
-        category: selectedCategory as 'cosmetics' | 'hair-extension',
-      });
-      setVariants([
-        {
-          id: uuidv4(),
-          product_id: '',
-          weight: 0,
-          length: 0,
-          price: 0,
-          discount_price: 0,
-          colors: [],
-        },
-      ]);
-      setMainImageUrl('');
-      setExistingGalleryUrls([]);
-      setGalleryUrls([]);
-      setImagesToDelete([]);
-    }
+  let bagContext;
+  try {
+    bagContext = useBag();
+  } catch {
+    bagContext = null;
   }
-  // eslint-disable-next-line
-}, [open, product, selectedCategory]);
+  // Wishlist handler
+  const handleWishlist = () => {
+    setIsWishlisted(prev => !prev);
+  };
+  interface HairExtensionProduct extends Product {
+    variants?: VariantType[];
+    main_image_url?: string;
+    gallery_urls?: string[];
+  }
 
-  // On edit: initialize all image states from product prop
-  useEffect(() => {
-    if (product) {
-      setMainImageUrl(product.main_image_url || '');
-      setExistingGalleryUrls(product.gallery_urls || []);
-      setGalleryUrls([]);
-    }
-  }, [product]);
+  // In your handleAddToBag function, add after adding products to bag:
+  const handleAddToBagUpdated = () => {
+    if (!product || product.isSoldOut || !bagContext) return;
 
-  // Add a useEffect to always reset the form to the selectedCategory when the dialog opens for a new product
-  useEffect(() => {
-    if (open && !product && selectedCategory) {
-      form.reset({
-        ...productSchema.parse({}),
-        category: selectedCategory as 'cosmetics' | 'hair-extension',
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    const price = selectedVariant?.price ?? product.price;
+
+    for (let i = 0; i < quantity; i++) {
+      bagContext.addToBag({
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        price,
+        variant: `${selectedVariant?.length} ${selectedVariant?.topper_size}`,
+        color: selectedColor?.name,
       });
-      setMainImageUrl('');
-      setExistingGalleryUrls([]);
-      setGalleryUrls([]);
-      setImagesToDelete([]);
     }
-  }, [open, selectedCategory, product, form]);
-
-  // Main image upload handler
-  const handleMainImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const productId = product?.id || uuidv4();
-    const path = `products/${productId}/main.jpg`;
-    const url = await uploadImage(file, path);
-    setMainImageUrl(url);
+    setAddedCount(quantity);
+    setShowAddedAlert(true);
+    setTimeout(() => setShowAddedAlert(false), 2500);
   };
 
-  // Gallery images upload handler
-  const handleGallerySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    const productId = product?.id || uuidv4();
-    const urls = await Promise.all(
-      files.map((file: File) => uploadImage(file, `products/${productId}/gallery/${uuidv4()}.jpg`))
-    );
-    setGalleryUrls(prev => [...prev, ...urls]);
-  };
 
-  // Remove gallery image handler
-  const removeGalleryImage = async (index: number, isExisting: boolean) => {
-    const url = isExisting ? existingGalleryUrls[index] : galleryUrls[index];
-    await deleteImageByUrl(url);
-    if (isExisting) {
-      setExistingGalleryUrls(prev => prev.filter((_, i) => i !== index));
-    } else {
-      setGalleryUrls(prev => prev.filter((_, i) => i !== index));
-    }
-  };
+  useEffect(() => {
+    const fetchDetailedProduct = async () => {
+      if (!product) return;
 
-  // 2. Update onSubmit to use Firestore and Firebase Storage
-  const onSubmit: import('react-hook-form').SubmitHandler<ProductFormData> = async (data) => {
-    setIsSubmitting(true);
-    try {
-      const productId = product?.id || uuidv4();
-      // Use mainImageUrl and galleryUrls state
-      if (!mainImageUrl) {
-        toast.error('Please upload a main product image.');
-        setIsSubmitting(false);
-        return;
-      }
-      const now = new Date().toISOString();
-      // Only include variants for hair-extension
-      const productData = {
-        ...data,
-        main_image_url: mainImageUrl,
-        gallery_urls: [...existingGalleryUrls, ...galleryUrls],
-        updated_at: now,
-        created_at: (product as any)?.created_at || now,
-        ...(data.category === 'hair-extension' ? { variants } : {}),
-      };
-      const category = data.category as 'cosmetics' | 'hair-extension';
-      const collectionName = data.category === 'hair-extension' ? 'hair_extensions' : 'cosmetics';
-
-      if (product?.id) {
-        // Update existing product
-        await updateDoc(doc(firestore, collectionName, product.id), productData);
+      const category = product.category?.toLowerCase();
+      if (category === "hair" || category === "hair-extension") {
+        const hairProduct = await getHairExtensionById(product.id);
+        if (hairProduct) {
+          console.log("Fetched hair product from Firebase:", hairProduct);
+          setDetailedProduct(hairProduct as SupabaseProduct);
+          setVariants(((hairProduct as unknown) as HairProduct)?.variants || []);
+        } else {
+          setVariants([]);
+        }
       } else {
-        // Create new product
-        await addDoc(collection(firestore, collectionName), productData);
+        const products = await getProducts();
+        const fullProduct = products.find((p) => p.id === product.id);
+        setDetailedProduct(fullProduct || null);
+        setVariants(((fullProduct as unknown) as HairProduct)?.variants || []);
       }
-      onSuccess();
-    } catch (error) {
-      toast.error('Failed to save product');
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
+    };
+
+    fetchDetailedProduct();
+  }, [product, open]);
+
+
+
+  // On variant change: reset color selection to first
+  useEffect(() => {
+    setSelectedColorIdx(0);
+  }, [selectedVariantIdx]);
+
+  if (!product) return null;
+
+  const images = [
+    detailedProduct?.main_image_url || product.imageUrl,
+    ...(detailedProduct?.gallery_urls || []),
+  ].filter(Boolean);
+
+  // Selected variant or fallback to empty object
+  const selectedVariant =
+    variants[selectedVariantIdx] !== undefined
+      ? variants[selectedVariantIdx]
+      : ({} as VariantType);
+
+  // Create a typed Map for color lookup:
+  const colorMap: Record<string, typeof hairColorOptions[0]> = {};
+  hairColorOptions.forEach((opt) => {
+    if (opt.name) colorMap[opt.name.trim().toLowerCase()] = opt;
+    if (opt.value) colorMap[opt.value.trim().toLowerCase()] = opt;
+  });
+
+  // Map colors with fallback images
+  const mappedColors: ColorType[] =
+    selectedVariant?.colors?.map((c) => {
+      if (!c.name) return { ...c, image: "", value: "" };
+      const key = c.name.trim().toLowerCase();
+      const matched = colorMap[key];
+      return {
+        ...c,
+        image: matched?.image || "",
+        value: matched?.value || "",
+      };
+    }) || [];
+
+  const selectedColor =
+    mappedColors[selectedColorIdx] !== undefined
+      ? mappedColors[selectedColorIdx]
+      : ({} as ColorType);
+
+  const handleAddToBag = () => {
+    if (product.isSoldOut || !bagContext) return;
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    const price = selectedVariant?.price ?? product.price;
+    for (let i = 0; i < quantity; i++) {
+      bagContext.addToBag({
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        price,
+        variant: `${selectedVariant?.length} ${selectedVariant?.topper_size}`,
+        color: selectedColor?.name,
+      });
     }
   };
+  console.log("Rendering with variants:", variants);
 
-  const watchedCategory = form.watch('category');
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-full md:max-w-4xl w-full max-h-[95vh] mx-auto overflow-y-auto flex flex-col items-center justify-center p-2 sm:p-4 md:p-8">
-        <DialogHeader className="pb-4 md:pb-6 border-b">
-          <DialogTitle className="flex items-center gap-2 md:gap-3 text-xl md:text-2xl font-bold">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="h-5 w-5 text-blue-600" />
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <DialogContent
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+          w-full max-w-4xl md:max-w-6xl lg:max-w-[1100px] max-h-screen p-0 overflow-y-auto
+          rounded-3xl shadow-2xl bg-white/95 backdrop-blur-sm border border-gray-100"
+        showCloseButton={false}
+      >
+        {/* Accessibility */}
+        <DialogTitle className="sr-only">{product.name} - Product Details</DialogTitle>
+        <DialogDescription className="sr-only">
+          View detailed information about {product.name}, including price, description,
+          and product specifications.
+        </DialogDescription>
+
+        {/* Close Button */}
+        <button
+          className="absolute top-6 right-6 z-30 p-3 rounded-full bg-white/90
+            backdrop-blur-sm shadow-lg hover:bg-white hover:shadow-xl transition-all duration-300 hover:scale-110"
+          onClick={() => onOpenChange(false)}
+          type="button"
+        >
+          <X className="w-5 h-5 text-gray-600" />
+        </button>
+
+        {/* Layout: Left - Images, Right - Details */}
+        <div className="flex flex-col lg:flex-row h-full overflow-hidden">
+
+          {/* Left: Images */}
+          <div className="w-full lg:w-1/2 bg-gradient-to-br from-gray-50 via-white to-gray-100 p-8 lg:p-10">
+            <div className="relative bg-white rounded-3xl shadow-2xl overflow-hidden mb-8
+              h-[400px] lg:h-[500px] flex items-center justify-center border border-gray-100">
+              {images.length > 0 ? (
+                <div className="relative w-full h-full max-w-[350px] lg:max-w-[450px] max-h-[350px] lg:max-h-[450px]
+                  flex items-center justify-center p-8">
+                  <Image
+                    src={images[selectedImageIndex]}
+                    alt={product.name}
+                    fill
+                    className="object-contain transition-transform duration-500 hover:scale-105"
+                    priority
+                    onError={(e) => {
+                      console.error(
+                        "Failed to load product image:",
+                        images[selectedImageIndex]
+                      );
+                      e.currentTarget.style.display = "none";
+                      e.currentTarget.parentElement?.nextElementSibling?.classList.remove(
+                        "hidden"
+                      );
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-gray-400">
+                  <Package className="w-20 h-20 mb-4 opacity-50" />
+                  <p className="text-lg font-medium">Image not available</p>
+                </div>
+              )}
+
+              {/* Image Navigation */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    onClick={() =>
+                      setSelectedImageIndex(
+                        (prev) => (prev > 0 ? prev - 1 : images.length - 1)
+                      )
+                    }
+                    className="absolute left-6 top-1/2 -translate-y-1/2 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-xl
+                      hover:bg-white hover:shadow-2xl transition-all duration-300 hover:scale-110"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      setSelectedImageIndex(
+                        (prev) => (prev < images.length - 1 ? prev + 1 : 0)
+                      )
+                    }
+                    className="absolute right-6 top-1/2 -translate-y-1/2 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-xl
+                      hover:bg-white hover:shadow-2xl transition-all duration-300 hover:scale-110"
+                  >
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Counter */}
+              {images.length > 1 && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2
+                  bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium">
+                  {selectedImageIndex + 1} / {images.length}
+                </div>
+              )}
             </div>
-            {product ? 'Edit Product' : 'Add New Product'}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="relative overflow-visible z-50 bg-white p-2 sm:p-4 md:p-8 rounded-xl md:rounded-2xl w-full">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 md:space-y-10">
-              {/* Basic Information Section */}
-              <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-                <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <Package className="h-5 w-5 text-gray-600" />
-                  </div>
-                  Basic Information
-                </h3>
-                
-                <div className="space-y-4 md:space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-base font-medium">Product Name *</FormLabel>
-                          <FormControl>
-                              <Input 
-                                placeholder="Enter product name" 
-                                className="h-11 w-full"
-                                {...field} 
-                              />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+          </div>
 
-                    <FormField
-                      control={form.control}
-                      name="sku"
-                      render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-base font-medium">SKU</FormLabel>
-                          <FormControl>
-                              <Input 
-                                placeholder="Product SKU" 
-                                className="h-11 w-full"
-                                {...field} 
-                              />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                          <FormLabel className="text-base font-medium">Short Description</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="Brief product description" 
-                              className="min-h-[80px] resize-none w-full"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="detailed_description"
-                    render={({ field }) => (
-                      <FormItem>
-                          <FormLabel className="text-base font-medium">Detailed Description</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="Detailed product description" 
-                              className="min-h-[120px] resize-none w-full"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          {/* Right: Details */}
+          <div
+            className="w-full lg:w-1/2 overflow-y-auto max-h-[50vh] lg:max-h-[98vh]
+              scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+          >
+            <div className="p-8 lg:p-10 space-y-8">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-12 w-12 border-3 border-black border-t-transparent"></div>
+                  <span className="ml-6 text-gray-600 font-medium text-lg">
+                    Loading product details...
+                  </span>
                 </div>
-              </div>
-
-              {/* Category and Status Section */}
-              <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-                <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Sparkles className="h-5 w-5 text-purple-600" />
-                  </div>
-                  Category & Status
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Category *</FormLabel>
-                        <FormControl>
-                          <BootstrapDropdown
-                            trigger={
-                              categoryOptions.find(opt => opt.value === field.value)?.label || 'Select category'
-                            }
-                            items={categoryOptions.map(opt => ({
-                              label: opt.label,
-                              onClick: () => field.onChange(opt.value)
-                            }))}
-                            className="h-11 w-full"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Status *</FormLabel>
-                        <FormControl>
-                          <BootstrapDropdown
-                            trigger={
-                              statusOptions.find(opt => opt.value === field.value)?.label || 'Select status'
-                            }
-                            items={statusOptions.map(opt => ({
-                              label: opt.label,
-                              onClick: () => field.onChange(opt.value)
-                            }))}
-                            className="h-11 w-full"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                    <FormField
-                      control={form.control}
-                      name="featured"
-                      render={({ field }) => (
-                      <FormItem className={`flex flex-col justify-between h-full rounded-xl border-2 p-4 transition-all duration-200 ${
-                        field.value ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                        }`}>
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base font-semibold cursor-pointer flex items-center gap-2">
-                            <Star className={`h-5 w-5 ${field.value ? 'text-yellow-500' : 'text-gray-400'}`} />
-                              Featured Product
-                            </FormLabel>
-                        <FormDescription className="text-sm text-gray-500">
-                            Show in featured section
-                          </FormDescription>
+              ) : (
+                <>
+                  {/* Enhanced Product Header */}
+                  <div className="space-y-6">
+                    {/* Brand & Category */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+                          <Sparkles className="w-4 h-4 text-white" />
                         </div>
-                        <FormControl>
-                        <div className="flex items-center justify-between w-full mt-4">
-                            <span className={`text-sm font-medium ${field.value ? 'text-yellow-600' : 'text-gray-500'}`}>
-                              {field.value ? 'Featured' : 'Regular'}
-                            </span>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            className="data-[state=checked]:bg-yellow-500"
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+                        <p className="text-lg font-bold text-black">
+                          Emilio Beaufort
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-sm px-4 py-2 border-2 font-semibold">
+                        {product.category === 'COSMETICS' ? 'Beauty & Personal Care' : 'Hair Care'}
+                      </Badge>
+                    </div>
 
-              {/* Variants Section */}
-              {watchedCategory === 'hair-extension' && (
-                <div className="col-span-2 mt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <FormLabel className="text-base font-medium">Product Variants</FormLabel>
-                    <Button
-                      type="button"
-                      onClick={addNewVariant}
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Variant
-                    </Button>
+                    {/* Enhanced Product Title */}
+                    <h1 className="text-3xl lg:text-4xl font-bold text-black leading-tight">
+                      {product.name}
+                    </h1>
+
+                    {/* Enhanced Product Status */}
+                    <div className="flex items-center gap-6">
+                      <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${product.isSoldOut
+                          ? 'bg-red-50 text-red-700 border border-red-200'
+                          : 'bg-green-50 text-green-700 border border-green-200'
+                        }`}>
+                        <div className={`w-2 h-2 rounded-full ${product.isSoldOut ? 'bg-red-500' : 'bg-green-500'
+                          }`}></div>
+                        <span className="text-sm font-semibold">
+                          {product.isSoldOut ? 'Out of Stock' : 'In Stock'}
+                        </span>
+                      </div>
+                      {detailedProduct?.stock_quantity && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Package className="w-4 h-4" />
+                          <span>{detailedProduct.stock_quantity} available</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  {variants.length > 0 && (
-                    <div className="space-y-4">
-                      {variants.map((variant, index) => (
-                        <div 
-                          key={variant.id} 
-                          className={`border rounded-lg p-4 cursor-pointer transition-all duration-200 ${
-                              selectedVariant === variant.id 
-                              ? 'border-amber-500 bg-amber-50' 
-                              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                          }`}
-                          onClick={() => handleVariantSelect(variant.id)}
-                        >
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-medium text-gray-800 flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="selectedVariant"
-                                checked={selectedVariant === variant.id}
-                                onChange={() => handleVariantSelect(variant.id)}
-                                className="text-amber-600"
-                              />
-                              Variant {index + 1}
-                            </h4>
-                            <Button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeVariant(index);
-                              }}
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            {/* Length */}
-                            <div>
-                              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                                Length *
-                              </label>
-                              <Input
-                                placeholder="e.g., 18 inches"
-                                value={variant.length}
-                                onChange={(e) => handleVariantChange(index, 'length', e.target.value)}
-                                className="h-10"
-                              />
-                            </div>
-                            {/* Topper Size (Optional) */}
-                            <div>
-                              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                                Topper Size
-                              </label>
-                              <Input
-                                placeholder="e.g., 6x6, 5x5"
-                                value={variant.topper_size || ''}
-                                onChange={(e) => handleVariantChange(index, 'topper_size', e.target.value)}
-                                className="h-10"
-                              />
-                            </div>
-                            {/* Price */}
-                            <div>
-                              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                                Price (₹) *
-                              </label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="0.00"
-                                value={variant.price}
-                                onChange={(e) => handleVariantChange(index, 'price', e.target.value)}
-                                className="h-10"
-                              />
-                            </div>
-                          </div>
-                          {/* Color Selection Section - now in a new row */}
-                          <div className="mb-8 mt-6">
-                            <div className="flex items-center gap-3 mb-4">
-                              <FormLabel className="text-base font-medium">Colors:</FormLabel>
-                              <span className="text-sm text-gray-600">
-                                {(variant.colors ?? []).length === 0
-                                  ? 'Select colors'
-                                  : (variant.colors ?? [])
-                                      .map(value => {
-                                        const matched = hairColorOptions.find(option => option.value === value);
-                                        return matched ? matched.name : value;
-                                      })
-                                      .join(', ')}
+                  {/* Price & Tax */}
+                  <div
+                    className="bg-gradient-to-br from-gray-50 via-white to-gray-100 rounded-3xl p-8
+                      border border-gray-200 shadow-lg"
+                  >
+                    <div className="space-y-6">
+                      <div className="flex items-baseline gap-4">
+                        <span className="text-lg text-gray-600 font-medium">₹</span>
+                        <span className="text-5xl lg:text-6xl font-light text-black">
+                          {(selectedVariant?.price ?? product.price).toLocaleString(
+                            "en-IN"
+                          )}
+                        </span>
+                        {selectedVariant?.original_price &&
+                          selectedVariant.original_price > (selectedVariant.price ?? 0) && (
+                            <div className="flex flex-col items-start">
+                              <span className="text-xl text-gray-400 line-through">
+                                ₹{selectedVariant.original_price.toLocaleString("en-IN")}
+                              </span>
+                              <span className="text-sm text-red-600 font-semibold">
+                                Save ₹
+                                {(
+                                  selectedVariant.original_price -
+                                  (selectedVariant.price ?? 0)
+                                ).toLocaleString("en-IN")}
                               </span>
                             </div>
+                          )}
+                      </div>
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-medium">All taxes included</span>
+                    </div>
+                  </div>
+
+                  {/* Variant + Color Section */}
+                  {variants.length > 0 && (
+                    <div
+                      className="mt-6 bg-gradient-to-br from-gray-50 via-white to-gray-100
+      rounded-3xl p-8 border border-gray-200 shadow-lg"
+                    >
+                      <div className="space-y-6">
+                        {/* Variant Section */}
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            LENGTH:{" "}
+                            <span className="font-semibold">
+                              {selectedVariant?.length} Inch{"\u00A0\u00A0"}{selectedVariant?.topper_size}
+                            </span>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {variants.map((variant, idx) => (
+                              <button
+                                type="button"
+                                key={variant.id}
+                                onClick={() => {
+                                  setSelectedVariantIdx(idx);
+                                }}
+                                className={`px-4 py-2 border text-sm min-w-[140px] text-center transition-all rounded-sm
+                ${idx === selectedVariantIdx
+                                    ? "border-black font-semibold bg-white shadow-sm"
+                                    : "border-gray-300 bg-white hover:border-black"
+                                  }`}
+                              >
+                                {variant.length}Inch{"\u00A0"} {variant.topper_size}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Color Section */}
+                        {mappedColors.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">
+                              COLOR:{" "}
+                              <span className="font-semibold">
+                                {mappedColors[selectedColorIdx]?.name}
+                              </span>
+                            </p>
                             <div className="flex flex-wrap gap-3">
-                              {hairColorOptions.map((color) => {
-                                const isSelected = (variant.colors ?? []).includes(color.value);
+                              {mappedColors.map((color, idx) => {
+                                const isSelected = idx === selectedColorIdx;
                                 return (
-                                  <div key={color.value} className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (isSelected) {
-                                          setVariants(prev => prev.map(v => v.id === variant.id ? { ...v, colors: [...((v.colors ?? []).filter(c => c !== color.value))] } : v));
-                                        } else {
-                                          setVariants(prev => prev.map(v => v.id === variant.id ? { ...v, colors: [...(v.colors ?? []), color.value] } : v));
-                                        }
-                                      }}
-                                      className={`w-12 h-12 rounded-full border-4 transition-all duration-200 ${
-                                        isSelected
-                                          ? 'border-amber-500 scale-110 shadow-lg'
-                                          : 'border-gray-300 hover:border-gray-400'
+                                  <button
+                                    type="button"
+                                    key={color.value || color.name}
+                                    onClick={() => setSelectedColorIdx(idx)}
+                                    className={`w-12 h-12 rounded-full border-4 transition-all duration-200 ${isSelected
+                                        ? "border-[#D4AF37] scale-110 shadow-lg"
+                                        : "border-gray-300 hover:border-gray-400"
                                       }`}
-                                      style={{
-                                        backgroundImage: `url(${color.image})`,
-                                        backgroundSize: 'cover',
-                                        backgroundPosition: 'center',
-                                      }}
-                                    />
-                                    {isSelected && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setVariants(prev => prev.map(v => v.id === variant.id ? { ...v, colors: [...((v.colors ?? []).filter(c => c !== color.value))] } : v))
-                                        }
-                                        className="absolute -top-2 -right-2 bg-white text-red-600 border border-red-600 rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                                        title="Remove"
-                                      >
-                                        ×
-                                      </button>
-                                    )}
-                                  </div>
+                                    style={{
+                                      backgroundImage: `url(${color.image})`,
+                                      backgroundSize: "cover",
+                                      backgroundPosition: "center",
+                                    }}
+                                    title={color.name}
+                                  />
                                 );
                               })}
                             </div>
                           </div>
+                        )}
+
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bulk Order Contact Line */}
+                  <div className="text-center py-6">
+                    <button
+                      onClick={() => setShowContactDialog(true)}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#B7A16C] text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 transform"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Contact Sales Team for Bulk Orders
+                    </button>
+                  </div>
+
+                  {/* Enhanced Product Description with See More/Less */}
+                  {(product.description || detailedProduct?.detailed_description) && (
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                        <Info className="w-5 h-5 text-gray-600" />
+                        About This Product
+                      </h3>
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        {(() => {
+                          const desc = detailedProduct?.detailed_description || product.description || '';
+                          const words = desc.split(' ');
+                          const shouldTruncate = words.length > 40; // Roughly 3-4 lines worth of text
+                          const truncatedText = words.slice(0, 40).join(' ');
+
+                          return (
+                            <div className="space-y-2">
+                              <p className="text-gray-700 leading-relaxed text-base break-words overflow-wrap-anywhere">
+                                {showFullDescription || !shouldTruncate ? desc : `${truncatedText}...`}
+                              </p>
+                              {shouldTruncate && (
+                                <button
+                                  className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm focus:outline-none transition-colors duration-200"
+                                  onClick={() => setShowFullDescription(prev => !prev)}
+                                >
+                                  {showFullDescription ? 'Show Less' : 'Read More'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enhanced Product Specifications */}
+                  {detailedProduct && (detailedProduct.weight || detailedProduct.dimensions) && (
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                        <Package className="w-5 h-5 text-gray-600" />
+                        Product Details
+                      </h3>
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {detailedProduct.weight && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Weight</span>
+                              <span className="text-sm font-bold">{detailedProduct.weight}g</span>
+                            </div>
+                          )}
+                          {detailedProduct.dimensions && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Dimensions</span>
+                              <span className="text-sm font-bold">{detailedProduct.dimensions}</span>
+                            </div>
+                          )}
+
                         </div>
-                      ))}
+                      </div>
                     </div>
                   )}
-                  {variants.length === 0 && (
-                    <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
-                      <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                      <p className="text-gray-500 mb-2">No variants added yet</p>
-                      <p className="text-sm text-gray-400">Click "Add Variant" to create product variations</p>
+
+                  {/* Enhanced Category-Specific Information */}
+                  {detailedProduct && isCosmeticsProduct(detailedProduct) && (
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                        <Sparkles className="w-5 h-5 text-gray-600" />
+                        Beauty Details
+                      </h3>
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Basic Information Fields */}
+                          {detailedProduct.skin_type && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Skin Type</span>
+                              <span className="text-sm font-bold break-words overflow-wrap-break-word">{detailedProduct.skin_type}</span>
+                            </div>
+                          )}
+                          {detailedProduct.volume_size && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Volume</span>
+                              <span className="text-sm font-bold break-words overflow-wrap-break-word">{detailedProduct.volume_size}</span>
+                            </div>
+                          )}
+                          {detailedProduct.spf_level && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">SPF Level</span>
+                              <span className="text-sm font-bold break-words overflow-wrap-break-word">{detailedProduct.spf_level}</span>
+                            </div>
+                          )}
+                          {detailedProduct.weight && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Weight</span>
+                              <span className="text-sm font-bold break-words overflow-wrap-break-word">{detailedProduct.weight}g</span>
+                            </div>
+                          )}
+                          {detailedProduct.dimensions && (
+                            <div className="flex justify-between py-3 border-b border-gray-100">
+                              <span className="text-sm text-gray-600 font-medium">Dimensions</span>
+                              <span className="text-sm font-bold break-words overflow-wrap-break-word">{detailedProduct.dimensions}</span>
+                            </div>
+                          )}
+
+                          {/* Product Benefits - Long text with read more */}
+                          {detailedProduct.product_benefits && (
+                            <div className="md:col-span-2 py-3 border-b border-gray-100">
+                              <span className="text-sm font-bold text-gray-600 block mb-2">Product Benefits</span>
+                              {(() => {
+                                const benefits = detailedProduct.product_benefits || '';
+                                const words = benefits.split(' ');
+                                const shouldTruncate = words.length > 25;
+                                const truncatedText = words.slice(0, 25).join(' ');
+
+                                return (
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-gray-700 leading-relaxed break-words overflow-wrap-break-word">
+                                      {showFullBenefits || !shouldTruncate ? benefits : `${truncatedText}...`}
+                                    </p>
+                                    {shouldTruncate && (
+                                      <button
+                                        className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm focus:outline-none transition-colors duration-200"
+                                        onClick={() => setShowFullBenefits(prev => !prev)}
+                                      >
+                                        {showFullBenefits ? 'Show Less' : 'Read More'}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+
+                          {/* Ingredients - Long text with read more */}
+                          {detailedProduct.ingredients && (
+                            <div className="md:col-span-2 py-3 border-b border-gray-100">
+                              <span className="text-sm font-bold text-gray-600 block mb-2">Ingredients</span>
+                              <div className="space-y-2">
+                                <p className="text-sm text-gray-700 leading-relaxed break-words overflow-wrap-break-word">
+                                  {(() => {
+                                    const ingredients = detailedProduct.ingredients || '';
+                                    const words = ingredients.split(' ');
+                                    const shouldTruncate = words.length > 30;
+                                    const truncatedText = words.slice(0, 30).join(' ');
+                                    return showFullIngredients || !shouldTruncate ? ingredients : `${truncatedText}...`;
+                                  })()}
+                                </p>
+                                {detailedProduct.ingredients.split(' ').length > 30 && (
+                                  <button
+                                    className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm focus:outline-none transition-colors duration-200"
+                                    onClick={() => setShowFullIngredients(prev => !prev)}
+                                  >
+                                    {showFullIngredients ? 'Show Less' : 'Read More'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
+
+                  {detailedProduct && isHairExtensionsProduct(detailedProduct) && (
+                    <>
+                      <div className="space-y-4">
+                        <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                          <Award className="w-5 h-5 text-gray-600" />
+                          Hair Details
+                        </h3>
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {detailedProduct.hair_type && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Hair Type</span>
+                                <span className="text-sm font-bold">{detailedProduct.hair_type}</span>
+                              </div>
+                            )}
+                            {detailedProduct.hair_texture && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Hair Texture</span>
+                                <span className="text-sm font-bold">{detailedProduct.hair_texture}</span>
+                              </div>
+                            )}
+                            {detailedProduct.hair_length && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Hair Length</span>
+                                <span className="text-sm font-bold">{detailedProduct.hair_length}</span>
+                              </div>
+                            )}
+                            {detailedProduct.weight && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Weight</span>
+                                <span className="text-sm font-bold">{detailedProduct.weight}g</span>
+                              </div>
+                            )}
+                            {detailedProduct.hair_color_shade && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Color</span>
+                                <span className="text-sm font-bold">{detailedProduct.hair_color_shade}</span>
+                              </div>
+                            )}
+                            {detailedProduct.stock_quantity && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Quantity</span>
+                                <span className="text-sm font-bold">{detailedProduct.stock_quantity}</span>
+                              </div>
+                            )}
+                            {detailedProduct.installation_method && (
+                              <div className="flex justify-between py-3 border-b border-gray-100">
+                                <span className="text-sm text-gray-600 font-medium">Installation Method</span>
+                                <span className="text-sm font-bold">{detailedProduct.installation_method}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Care Instructions Section */}
+                      {detailedProduct.care_instructions && (
+                        <div className="space-y-4 mt-6">
+                          <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                            <Info className="w-5 h-5 text-gray-600" />
+                            Care Instructions
+                          </h3>
+                          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            {(() => {
+                              const care = detailedProduct.care_instructions || '';
+                              const words = care.split(' ');
+                              const shouldTruncate = words.length > 40; // Roughly 3-4 lines worth of text
+                              const truncatedText = words.slice(0, 40).join(' ');
+
+                              return (
+                                <div className="space-y-2">
+                                  <p className="text-gray-700 leading-relaxed text-base break-words overflow-wrap-anywhere">
+                                    {showFullCare || !shouldTruncate ? care : `${truncatedText}...`}
+                                  </p>
+                                  {shouldTruncate && (
+                                    <button
+                                      className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm focus:outline-none transition-colors duration-200"
+                                      onClick={() => setShowFullCare(prev => !prev)}
+                                    >
+                                      {showFullCare ? 'Show Less' : 'Read More'}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Enhanced Purchase Actions */}
+                  {showAddToCartButton && (
+                    <div className="space-y-8">
+                      {/* Enhanced Quantity Selector */}
+                      <div className="flex items-center justify-between bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <span className="text-lg font-bold text-black">Quantity</span>
+                        <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-50">
+                          <button
+                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                            className="px-6 py-3 hover:bg-gray-100 transition-colors disabled:opacity-50 font-bold text-lg"
+                            disabled={product.isSoldOut}
+                          >
+                            <span className="text-gray-600">−</span>
+                          </button>
+                          <span className="px-8 py-3 min-w-[80px] text-center font-bold text-black text-lg bg-white">
+                            {quantity}
+                          </span>
+                          <button
+                            onClick={() => setQuantity(quantity + 1)}
+                            className="px-6 py-3 hover:bg-gray-100 transition-colors disabled:opacity-50 font-bold text-lg"
+                            disabled={product.isSoldOut}
+                          >
+                            <span className="text-gray-600">+</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Added to Bag Alert */}
+                      {showAddedAlert && (
+                        <div className="w-full mb-2 flex items-center justify-center">
+                          <div className="bg-green-100 border border-green-300 text-green-800 px-4 py-2 rounded-xl font-semibold text-base shadow-sm animate-fade-in">
+                            {addedCount} {addedCount === 1 ? 'product' : 'products'} added to bag
+                          </div>
+                        </div>
+                      )}
+                      {/* Enhanced Action Buttons */}
+                      <div className="space-y-4">
+                        <Button
+                          onClick={handleAddToBag}
+                          disabled={product.isSoldOut}
+                          className="w-full bg-gradient-to-r from-black to-gray-800 hover:from-gray-800 hover:to-black text-white h-16 text-lg font-bold rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                        >
+                          <ShoppingBag className="w-6 h-6 mr-3" />
+                          {product.isSoldOut ? 'Currently unavailable' : 'Add to Bag'}
+                        </Button>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button
+                            variant="outline"
+                            onClick={handleWishlist}
+                            className="h-14 border-2 border-gray-200 hover:border-black hover:bg-gray-50 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
+                          >
+                            <Heart className={`w-5 h-5 mr-2 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                            {isWishlisted ? 'Saved' : 'Save'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="h-14 border-2 border-gray-200 hover:border-black hover:bg-gray-50 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
+                          >
+                            <Share2 className="w-5 h-5 mr-2 text-gray-600" />
+                            Share
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enhanced Services & Guarantees */}
+                  <div className="bg-gradient-to-br from-gray-50 via-white to-gray-100 rounded-3xl p-8 border border-gray-200 shadow-lg space-y-6">
+                    <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                      <Shield className="w-5 h-5 text-gray-600" />
+                      Services & Guarantees
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* <div className="flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Truck className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-black block text-sm">Free Delivery</span>
+                          <span className="text-xs text-gray-600">On orders ₹500+</span>
+                        </div>
+                      </div> */}
+
+                      <div className="flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <RotateCcw className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-black block text-sm">Quality Guarantee</span>
+                          <span className="text-xs text-gray-600">30-day return policy</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Headphones className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-black block text-sm">Expert Support</span>
+                          <span className="text-xs text-gray-600">Free consultation</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Box className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-black block text-sm">Secure Packaging</span>
+                          <span className="text-xs text-gray-600">Professional protection</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
-
-              {/* Pricing & Inventory Section */}
-              <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-                <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-green-600" />
-                  </div>
-                  Pricing & Inventory
-                </h3>
-                
-                <div className="space-y-6">
-                  {/* Discounted Price and Stock Quantity - Two Columns */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                      name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                          <FormLabel className="text-base font-medium">Discounted Price (₹)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            placeholder="0.00" 
-                            className="h-11 w-full"
-                          {...field} 
-                        />
-                        </FormControl>
-                        <FormDescription className="text-sm text-gray-500">
-                          Sale price in INR (₹) (leave empty if no discount)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="stock_quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                          <FormLabel className="text-base font-medium">Stock Quantity</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="0" 
-                            className="h-11 w-full"
-                          {...field} 
-                        />
-                        </FormControl>
-                        {/* Add an invisible FormDescription for alignment */}
-                        <FormDescription className="invisible select-none">placeholder</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="in_stock"
-                    render={({ field }) => (
-                      <FormItem className={`flex items-center justify-between rounded-xl border-2 p-4 transition-all duration-200 ${
-                        field.value ? 'border-emerald-400 bg-emerald-50' : 'border-red-200 bg-red-50 hover:border-red-300'
-                      }`}>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base font-semibold cursor-pointer flex items-center gap-2">
-                            <div className={`h-4 w-4 rounded-full ${field.value ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                            Inventory Status
-                          </FormLabel>
-                        <FormDescription className="text-sm text-gray-500">
-                          Product availability for customers
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <div className="flex items-center space-x-3">
-                          <span className={`text-sm font-medium ${field.value ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {field.value ? 'In Stock' : 'Out of Stock'}
-                          </span>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className={field.value ? "data-[state=checked]:bg-emerald-500" : "data-[state=unchecked]:bg-red-500"}
-                          />
-                        </div>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
             </div>
+          </div>
+        </div>
+      </DialogContent>
 
-            {/* Category-Specific Fields */}
-            {watchedCategory === 'cosmetics' && (
-              <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-                <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                  <div className="p-2 bg-pink-100 rounded-lg">
-                    <Sparkles className="h-5 w-5 text-pink-600" />
-                  </div>
-                  Cosmetics Information
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="skin_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Skin Type</FormLabel>
-                        <FormControl>
-                          <BootstrapDropdown
-                            trigger={
-                              skinTypeOptions.find(opt => opt.value === field.value)?.label || 'Select skin type'
-                            }
-                            items={skinTypeOptions.map(opt => ({
-                              label: opt.label,
-                              onClick: () => field.onChange(opt.value)
-                            }))}
-                            className="h-11 w-full"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      {/* Contact Dialog */}
+      <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
+        <DialogContent className="max-w-md mx-auto p-6">
+          <DialogTitle className="text-xl font-bold text-black mb-4">
+            Contact Sales Team
+          </DialogTitle>
+          <DialogDescription className="text-gray-600 mb-6 text-justify">
+            Get in touch with our sales team for bulk orders and special pricing.
+          </DialogDescription>
 
-                  <FormField
-                    control={form.control}
-                    name="volume_size"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Volume/Size</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., 50ml, 1.7 fl oz" className="h-11 w-full" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Product volume or size
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="spf_level"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">SPF Level</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., SPF 30, SPF 50+" className="h-11 w-full" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Sun protection factor (if applicable)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="mt-6">
-                  <FormField
-                    control={form.control}
-                    name="ingredients"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Ingredients (INCI Names)</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="List ingredients using INCI names, separated by commas"
-                            className="min-h-[100px] resize-none w-full"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Use International Nomenclature of Cosmetic Ingredients (INCI) names
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="mt-6">
-                  <FormField
-                    control={form.control}
-                    name="product_benefits"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium">Product Benefits</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="e.g., Anti-aging, Moisturizing, Brightening, Acne-fighting"
-                            className="min-h-[100px] resize-none w-full"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Key benefits and claims
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  <FormField
-                    control={form.control}
-                    name="dermatologist_tested"
-                    render={({ field }) => (
-                      <FormItem className={`flex flex-row items-center justify-between rounded-xl border-2 p-4 transition-all duration-200 ${
-                        field.value ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                          }`}>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base font-semibold cursor-pointer">
-                            Dermatologist Tested
-                          </FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Tested by dermatologists
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <div className="flex items-center space-x-3">
-                            <span className={`text-sm font-medium ${field.value ? 'text-green-600' : 'text-gray-500'}`}>
-                              {field.value ? 'Yes' : 'No'}
-                            </span>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-green-500"
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="cruelty_free"
-                    render={({ field }) => (
-                      <FormItem className={`flex flex-row items-center justify-between rounded-xl border-2 p-4 transition-all duration-200 ${
-                        field.value ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                          }`}>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base font-semibold cursor-pointer">
-                            Cruelty Free
-                          </FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Not tested on animals
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <div className="flex items-center space-x-3">
-                            <span className={`text-sm font-medium ${field.value ? 'text-blue-600' : 'text-gray-500'}`}>
-                              {field.value ? 'Yes' : 'No'}
-                            </span>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-blue-500"
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="organic_natural"
-                    render={({ field }) => (
-                      <FormItem className={`flex flex-row items-center justify-between rounded-xl border-2 p-4 transition-all duration-200 ${
-                        field.value ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                          }`}>
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base font-semibold cursor-pointer">
-                            Organic/Natural
-                          </FormLabel>
-                          <FormDescription className="text-sm text-gray-500">
-                            Made with organic/natural ingredients
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <div className="flex items-center space-x-3">
-                            <span className={`text-sm font-medium ${field.value ? 'text-purple-600' : 'text-gray-500'}`}>
-                              {field.value ? 'Yes' : 'No'}
-                            </span>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              className="data-[state=checked]:bg-purple-500"
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+              <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center">
+                <Mail className="w-5 h-5 text-white" />
               </div>
-            )}
-
-            {/* Images Section */}
-            <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-              <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <ImageIcon className="h-5 w-5 text-indigo-600" />
-                </div>
-                Product Images
-              </h3>
-              
-              <div className="space-y-8">
-                {/* Main Image */}
-                <div>
-                    <FormLabel className="text-base font-medium">Main Product Image</FormLabel>
-                    <div className="mt-4">
-                                          {mainImageUrl ? (
-                      <div className="relative w-40 h-40 rounded-lg overflow-hidden border-2 border-gray-200">
-                        <img
-                          src={mainImageUrl}
-                          alt="Main product"
-                          className="w-full h-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 h-8 w-8 p-0 rounded-full shadow-lg"
-                          onClick={async () => {
-                            try {
-                              await deleteProductImage(mainImageUrl, form.getValues('category'));
-                              setMainImageUrl('');
-                            } catch (error) {
-                              console.error('Error deleting main image:', error);
-                              toast.error('Failed to delete main image');
-                            }
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-gray-400 transition-colors">
-                        <ImageIcon className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                        <div className="space-y-2">
-                        <label htmlFor="main-image" className="cursor-pointer">
-                            <span className="text-base font-medium text-blue-600 hover:text-blue-500">
-                            Upload main image
-                          </span>
-                          <input
-                            id="main-image"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleMainImageSelect}
-                          />
-                        </label>
-                          <p className="text-sm text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Gallery Images */}
               <div>
-                  <FormLabel className="text-base font-medium">Gallery Images</FormLabel>
-                  <div className="mt-4">
-                  <div className="flex flex-wrap gap-4">
-                    {/* Existing images */}
-                                          {existingGalleryUrls.map((imageUrl, index) => (
-                      <div key={`existing-${index}`} className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-200">
-                        <img
-                          src={imageUrl}
-                          alt={`Gallery ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full shadow-lg"
-                          onClick={() => removeGalleryImage(index, true)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                    
-                    {/* New images */}
-                    {galleryUrls.map((imageUrl, index) => (
-                      <div key={`new-${index}`} className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-200">
-                        <img
-                          src={imageUrl}
-                          alt={`New gallery ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full shadow-lg"
-                          onClick={() => removeGalleryImage(index, false)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                    
-                    {/* Add new images */}
-                      <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-gray-400 transition-colors">
-                        <label htmlFor="gallery-images" className="cursor-pointer flex flex-col items-center">
-                          <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                          <span className="text-xs text-gray-500">Add More</span>
-                        <input
-                          id="gallery-images"
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          onChange={handleGallerySelect}
-                        />
-                      </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <span className="font-bold text-black block text-sm">Email</span>
+                <span className="text-sm text-gray-600">hello@emiliobeaufort.com</span>
               </div>
             </div>
 
-            {/* SEO Section */}
-            <div className="bg-white rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-              <h3 className="text-lg md:text-xl font-semibold flex items-center gap-2 md:gap-3 mb-4 md:mb-6 text-gray-800">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Sparkles className="h-5 w-5 text-orange-600" />
-                </div>
-                SEO Options
-              </h3>
-              
-              <div className="space-y-6">
-              <FormField
-                control={form.control}
-                name="seo_title"
-                render={({ field }) => (
-                  <FormItem>
-                      <FormLabel className="text-base font-medium">SEO Title</FormLabel>
-                    <FormControl>
-                        <Input placeholder="SEO optimized title" className="h-11 w-full" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="seo_description"
-                render={({ field }) => (
-                  <FormItem>
-                      <FormLabel className="text-base font-medium">SEO Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="SEO meta description" 
-                        className="min-h-[100px] resize-none w-full"
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="seo_keywords"
-                render={({ field }) => (
-                  <FormItem>
-                      <FormLabel className="text-base font-medium">SEO Keywords</FormLabel>
-                    <FormControl>
-                        <Input placeholder="keyword1, keyword2, keyword3" className="h-11 w-full" {...field} />
-                    </FormControl>
-                      <FormDescription className="text-sm text-gray-500">
-                        Separate keywords with commas
-                      </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+              <div className="w-10 h-10 bg-gradient-to-r from-[#B7A16C] to-[#D4AF37] rounded-xl flex items-center justify-center">
+                <Phone className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="font-bold text-black block text-sm">Phone</span>
+                <span className="text-sm text-gray-600">+91 8962648358</span>
               </div>
             </div>
+          </div>
 
-            {/* Form Actions */}
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-2 sm:p-4 md:p-8">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  <p className="font-medium">Ready to {product ? 'update' : 'create'} this product?</p>
-                  <p className="text-xs">Make sure all information is accurate before saving.</p>
-                </div>
-                <div className="flex items-center space-x-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting}
-                    className="min-w-[100px]"
-              >
-                Cancel
-              </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="min-w-[120px] bg-blue-600 hover:bg-blue-700"
-                  >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {product ? 'Updating...' : 'Creating...'}
-                  </>
-                ) : (
-                      <>
-                        <Package className="mr-2 h-4 w-4" />
-                        {product ? 'Update Product' : 'Create Product'}
-                      </>
-                )}
-              </Button>
-                </div>
-              </div>
-            </div>
-          </form>
-        </Form>
-      </div>
-    </DialogContent>
-  </Dialog>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500">
+              Available 24/7
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
   );
 }
