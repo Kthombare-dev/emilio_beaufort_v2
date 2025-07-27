@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   BookOpen,
+  Calendar, // For Meetings icon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -19,7 +20,14 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const sidebarItems = [
+interface SidebarItem {
+  name: string;
+  href?: string;
+  icon?: React.ReactNode;
+  subItems?: { name: string; href: string }[];
+}
+
+const sidebarItems: SidebarItem[] = [
   {
     name: 'Dashboard',
     href: '/admin/dashboard',
@@ -42,6 +50,12 @@ const sidebarItems = [
     name: 'Blog Posts',
     href: '/admin/blogs',
     icon: <BookOpen className="h-4 w-4" />
+  },
+  // Meetings item
+  {
+    name: 'Meetings',
+    href: '/admin/meeting',
+    icon: <Calendar className="h-4 w-4" />
   },
   {
     name: 'Career',
@@ -67,12 +81,16 @@ export default function Sidebar({ isSidebarOpen, isMobile, onClose }: SidebarPro
     router.replace('/admin/login');
   };
 
-  // Handle navigation
-  const handleNavigation = (href: string) => {
-    router.push(href);
-    // Always close sidebar on navigation for mobile/tablet
-    if (isMobile) {
-      onClose();
+  const handleNavigation = (href: string, e?: React.MouseEvent) => {
+    // e?.stopPropagation(); // Uncomment if clicks are being intercepted by parent elements
+    console.log(`Navigating to: ${href}`); // Debug log
+    try {
+      router.push(href);
+      if (isMobile) {
+        onClose();
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
     }
   };
 
@@ -100,35 +118,37 @@ export default function Sidebar({ isSidebarOpen, isMobile, onClose }: SidebarPro
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 bg-white">
           <div className="space-y-1">
-            {sidebarItems.map((item) => (
+            {sidebarItems.map((item, index) => (
               item.subItems ? (
-                <div key={item.name}>
+                <div key={`${item.name}-${index}`}>
                   <div className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-700">
                     <span className="flex items-center justify-center w-5 text-gray-500">{item.icon}</span>
                     <span>{item.name}</span>
                   </div>
                   <div className="ml-8 space-y-1">
-                    {item.subItems.map((sub) => (
+                    {item.subItems.map((sub, subIndex) => (
                       <button
-                        key={sub.name}
-                        onClick={() => handleNavigation(sub.href)}
+                        key={`${sub.href}-${subIndex}`}
+                        onClick={(e) => handleNavigation(sub.href, e)}
                         className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-gray-100 active:bg-gray-200 touch-manipulation ${pathname === sub.href ? 'bg-blue-50 text-blue-700 font-medium border-l-4 border-blue-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        aria-label={`Navigate to ${sub.name}`}
                       >
                         <span>{sub.name}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : item.href ? (
                 <button
-                  key={item.href || item.name}
-                  onClick={() => handleNavigation(item.href)}
+                  key={`${item.href}-${index}`}
+                  onClick={(e) => handleNavigation(item.href, e)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-all duration-200 hover:bg-gray-100 active:bg-gray-200 touch-manipulation ${pathname === item.href ? 'bg-blue-50 text-blue-700 font-medium border-l-4 border-blue-500 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                  aria-label={`Navigate to ${item.name}`}
                 >
                   <span className={`flex items-center justify-center w-5 ${pathname === item.href ? 'text-blue-600' : 'text-gray-500'}`}>{item.icon}</span>
                   <span className="font-medium">{item.name}</span>
                 </button>
-              )
+              ) : null // Skip if no href and no subItems
             ))}
           </div>
         </nav>
@@ -159,6 +179,7 @@ export default function Sidebar({ isSidebarOpen, isMobile, onClose }: SidebarPro
               ${isMobile ? 'text-base' : 'text-sm'}
             `}
             onClick={handleLogout}
+            aria-label="Logout"
           >
             <LogOut className="h-4 w-4" />
             <span className="font-medium">Logout</span>
@@ -167,4 +188,4 @@ export default function Sidebar({ isSidebarOpen, isMobile, onClose }: SidebarPro
       </aside>
     </>
   );
-} 
+}
