@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,9 +13,16 @@ export default function MeetingScheduledPage() {
     setOpen(true);
   }, []);
 
+  const handleDialogChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      router.push("/");
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-[#f5eee7] via-white to-[#ece9e6]">
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleDialogChange}>
         <DialogContent
           className="
             sm:max-w-[410px] 
@@ -41,7 +48,7 @@ export default function MeetingScheduledPage() {
               "
               style={{
                 fontFamily: `'Playfair Display', serif`,
-                letterSpacing: '-0.01em'
+                letterSpacing: '-0.01em',
               }}
             >
               Thank You for Scheduling!
@@ -49,10 +56,13 @@ export default function MeetingScheduledPage() {
           </DialogHeader>
           <div className="flex flex-col items-center text-center px-8 pb-8">
             <div className="text-5xl mb-3 select-none">✨</div>
-            <div className="text-lg font-medium text-gray-800 mb-1" style={{ fontFamily: "ui-serif, 'Noto Serif', serif" }}>
+            <div
+              className="text-lg font-medium text-gray-800 mb-1"
+              style={{ fontFamily: "ui-serif, 'Noto Serif', serif" }}
+            >
               Your meeting is confirmed.
             </div>
-            <div 
+            <div
               className="text-gray-500 text-base mb-7"
               style={{ fontFamily: "'Noto Sans', sans-serif" }}
             >
@@ -77,28 +87,11 @@ export default function MeetingScheduledPage() {
               "
               style={{
                 fontFamily: "'Noto Sans', sans-serif",
-                letterSpacing: '0.01em'
+                letterSpacing: '0.01em',
               }}
             >
               Back to Home
             </Button>
-            <button
-              className="
-                mt-1
-                text-sm
-                text-[#866353]
-                underline
-                hover:text-[#5a402b]
-                transition-colors
-                bg-transparent
-              "
-              onClick={() => setOpen(false)}
-              style={{
-                fontFamily: "'Noto Sans', sans-serif"
-              }}
-            >
-              Close this message
-            </button>
           </div>
         </DialogContent>
       </Dialog>
