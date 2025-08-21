@@ -22,12 +22,10 @@ export const metadata: Metadata = {
   },
   description: "Discover Emilio Beaufort's luxury temple hair extensions and grooming products.",
 
-  // old: alternates: { canonical: "https://emiliobeaufort.com/" },
-  // new:
+  //alternates: { canonical: "https://emiliobeaufort.com/" },
   alternates: { canonical: "https://emiliobeaufort.com/" },
 
   //Added Authors / Creator / Publisher
-  // new:
   authors: [{ name: "Emilio Beaufort", url: "https://emiliobeaufort.com" }],
   creator: "Emilio Beaufort",
   publisher: "Emilio Beaufort",
@@ -41,8 +39,8 @@ export const metadata: Metadata = {
     "Premium Grooming Products",
   ],
 
-  // old: openGraph: { images: [{ url: "/favicon.ico" }] } 
-  // new: Replaced with real OG image (1200×630)
+  //openGraph: { images: [{ url: "/favicon.ico" }] } 
+  //Replaced with real OG image (1200×630)
   openGraph: {
     title: "Emilio Beaufort | Luxury Temple Hair Extensions & Grooming",
     description: "Discover Emilio Beaufort's luxury temple hair extensions and grooming products.",
@@ -59,7 +57,7 @@ export const metadata: Metadata = {
   },
 
   //twitter: { images: ["/favicon.ico"] }
-  // new:replaced with og-image.jpg
+  //replaced with og-image.jpg
   twitter: {
     card: "summary_large_image",
     site: "@emiliobeaufort",
