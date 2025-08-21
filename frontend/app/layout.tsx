@@ -13,6 +13,7 @@ import type { Metadata } from "next";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap" });
 
+//METADATA
 export const metadata: Metadata = {
   metadataBase: new URL("https://emiliobeaufort.com"),
   title: {
@@ -20,7 +21,28 @@ export const metadata: Metadata = {
     template: "%s | Emilio Beaufort",
   },
   description: "Discover Emilio Beaufort's luxury temple hair extensions and grooming products.",
+
+  // old: alternates: { canonical: "https://emiliobeaufort.com/" },
+  // new:
   alternates: { canonical: "https://emiliobeaufort.com/" },
+
+  //Added Authors / Creator / Publisher
+  // new:
+  authors: [{ name: "Emilio Beaufort", url: "https://emiliobeaufort.com" }],
+  creator: "Emilio Beaufort",
+  publisher: "Emilio Beaufort",
+
+  // Added Keywords in array format
+  keywords: [
+    "Luxury Hair Extensions",
+    "Temple Hair",
+    "Human Hair Extensions",
+    "Emilio Beaufort",
+    "Premium Grooming Products",
+  ],
+
+  // old: openGraph: { images: [{ url: "/favicon.ico" }] } 
+  // new: Replaced with real OG image (1200×630)
   openGraph: {
     title: "Emilio Beaufort | Luxury Temple Hair Extensions & Grooming",
     description: "Discover Emilio Beaufort's luxury temple hair extensions and grooming products.",
@@ -28,22 +50,27 @@ export const metadata: Metadata = {
     siteName: "Emilio Beaufort",
     images: [
       {
-        url: "/og-image.jpg",
+        url: "/og-image.jpg", //real OG image instead of favicon
         width: 1200,
         height: 630,
         alt: "Luxury Temple Hair Extensions by Emilio Beaufort",
       },
     ],
   },
+
+  //twitter: { images: ["/favicon.ico"] }
+  // new:replaced with og-image.jpg
   twitter: {
     card: "summary_large_image",
     site: "@emiliobeaufort",
     creator: "@emiliobeaufort",
     images: ["/og-image.jpg"],
   },
+
   robots: "index, follow",
 };
 
+//ROOT LAYOUT 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
