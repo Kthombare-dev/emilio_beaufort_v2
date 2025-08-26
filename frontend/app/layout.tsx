@@ -3,12 +3,11 @@ import { Inter, Playfair_Display } from "next/font/google";
 import { Toaster } from "sonner";
 import ConditionalNavbar from "@/components/ConditionalNavbar";
 import { Suspense } from "react";
-import { BagProvider } from "@/components/BagContext";
-import { Toaster as ReactHotToastToaster } from "react-hot-toast";
-import GoogleAnalytics from "@/components/GoogleAnalytics";
-import Script from "next/script";
-import ConditionalAutoFeedback from "@/components/ConditionalAutoFeedback";
-import type { Metadata } from "next";
+import { BagProvider } from '@/components/BagContext';
+import { Toaster as ReactHotToastToaster } from 'react-hot-toast';
+import ConditionalAutoFeedback from '@/components/ConditionalAutoFeedback';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
+import Script from 'next/script';
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap" });
@@ -101,6 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.variable} ${playfair.variable} bg-white text-gray-900 font-sans`}>
         <BagProvider>
+          <ScrollToTop />
           <ConditionalNavbar />
           <main>{children}</main>
         </BagProvider>
