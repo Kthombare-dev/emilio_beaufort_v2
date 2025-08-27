@@ -7,7 +7,7 @@ import { compressMultipleImages, dataUrlToBuffer, bufferToDataUrl, compressImage
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const genAIv2 = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-// Helper: generate images via Gemini 2.0 Flash preview image generation
+// Helper: generate images via Gemini with fallback models
 async function generateImagesViaGemini(
   topic: string
 ): Promise<Array<{ url: string; alt: string; source?: string }>> {
@@ -17,59 +17,89 @@ async function generateImagesViaGemini(
     return [];
   }
 
-  try {
-    // Use the new GoogleGenAI SDK for image generation
-    const response = await genAIv2.models.generateContent({
-      model: "gemini-2.0-flash-preview-image-generation",
-      contents: [
-        {
-          text: `Create a professional, elegant header image for a blog post about "${topic}". 
-          The image should reflect the luxury hair extension brand Emilio Beaufort, 
-          with sophisticated styling, professional composition, and high-end aesthetic. 
-          Make it suitable for B2B audience with clean, modern design.`
-        }
-      ],
-      config: {
-        responseModalities: [Modality.TEXT, Modality.IMAGE],
-      },
-    });
+  // Try multiple models for better reliability - using only available models
+  const imageModels = [
+    "gemini-2.0-flash-preview-image-generation",
+    "gemini-2.5-flash-preview-image-generation"
+  ];
 
-    const images: Array<{ url: string; alt: string; source?: string }> = [];
-    
-    // Extract images from the response with proper null checks
-    if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
-          const imageData = part.inlineData.data;
-          const mimeType = part.inlineData.mimeType;
-          
-          images.push({
-            url: `data:${mimeType};base64,${imageData}`,
-            alt: `Header image for blog topic: ${topic}`,
-            source: "gemini-2.0-flash-preview-image-generation",
-          });
-          
-          // Limit to 3 images
-          if (images.length >= 3) break;
+  const prompt = `Create a professional, elegant header image for a blog post about "${topic}". 
+    The image should reflect the luxury hair extension brand Emilio Beaufort, 
+    with sophisticated styling, professional composition, and high-end aesthetic. 
+    Make it suitable for B2B audience with clean, modern design.`;
+
+  for (const modelName of imageModels) {
+    try {
+      console.log(`Attempting image generation with: ${modelName}`);
+      const startTime = Date.now();
+      
+      // Add timeout for image generation to prevent hanging
+      const imageGenerationPromise = genAIv2.models.generateContent({
+        model: modelName,
+        contents: [{ text: prompt }],
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
+        },
+      });
+
+      // Race against timeout
+      const response = await Promise.race([
+        imageGenerationPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Image generation timeout')), 15000)
+        )
+      ]) as any;
+
+      const images: Array<{ url: string; alt: string; source?: string }> = [];
+      
+      // Extract images from the response with proper null checks
+      if (response?.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+            const imageData = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType;
+            
+            images.push({
+              url: `data:${mimeType};base64,${imageData}`,
+              alt: `Header image for blog topic: ${topic}`,
+              source: modelName,
+            });
+            
+            // Limit to 3 images
+            if (images.length >= 3) break;
+          }
         }
       }
-    }
 
-    if (images.length > 0) {
-      console.log(`Gemini image generation successful: ${images.length} images created`);
-      return images;
-    }
+      if (images.length > 0) {
+        const elapsed = Date.now() - startTime;
+        console.log(`${modelName} image generation successful: ${images.length} images created in ${elapsed}ms`);
+        return images;
+      }
 
-    console.warn("No images generated from Gemini response");
-    return [];
-    
-  } catch (err) {
-    console.warn("Gemini image generation failed:", err);
-    return [];
+      console.warn(`${modelName}: No images generated from response`);
+      
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Unknown error';
+      console.warn(`${modelName} image generation failed: ${errorMsg}`);
+      
+      // If it's a 404 or model not found error, skip to next model immediately
+      if (errorMsg.includes('404') || errorMsg.includes('NOT_FOUND') || errorMsg.includes('not found')) {
+        console.log(`${modelName} not available, trying next model...`);
+        continue;
+      }
+      
+      // For other errors, still try the next model
+      continue;
+    }
   }
+
+  console.warn("All image generation models failed");
+  return [];
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await request.json();
     const { topic, tone, length, keywords, targetAudience, includeImages } = body;
@@ -80,6 +110,20 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    console.log(`Starting blog generation for topic: "${topic}"`);
+    
+    // Start image generation immediately in parallel with timeout
+    const imageGenerationPromise = includeImages ? 
+      Promise.race([
+        generateImagesViaGemini(topic),
+        new Promise<any[]>((_, reject) => 
+          setTimeout(() => reject(new Error('Image generation timeout')), 10000)
+        )
+      ]).catch(err => {
+        console.warn('Image generation failed or timed out:', err);
+        return [];
+      }) : Promise.resolve([]);
 
     // Use JSON mode to ensure strict JSON output
     const generationConfig: any = {
@@ -117,11 +161,14 @@ Please provide the response in the following JSON format:
 }
 `;
 
+    // Helper function to extract text from Gemini response with better error handling
     const getResponseText = (resp: any): string => {
       try {
         const t = (resp.text?.() || '').trim();
         if (t) return t;
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to get response text via text() method:', err);
+      }
       try {
         const cands = resp.candidates || [];
         for (const c of cands) {
@@ -131,62 +178,224 @@ Please provide the response in the following JSON format:
             if (pt) return pt;
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to extract text from candidates:', err);
+      }
       return '';
     };
 
-    const modelOrder = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Optimized retry function with shorter delays for better performance
+    const retryWithBackoff = async (fn: () => Promise<any>, maxRetries: number = 2): Promise<any> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error: any) {
+          const isRetryable = error?.message?.includes('500') || 
+                             error?.message?.includes('Internal Server Error') ||
+                             error?.message?.includes('quota') ||
+                             error?.status === 500 ||
+                             error?.status === 429;
+          
+          if (attempt === maxRetries || !isRetryable) {
+            throw error;
+          }
+          
+          // Reduced delay for faster retries: 500ms, 1s max
+          const delay = Math.min(500 * attempt, 1000);
+          console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    };
+
+    // Enhanced JSON parsing with better error handling for large responses
+    const parseJsonResponse = (text: string): any => {
+      if (!text) throw new Error('Empty response text');
+      
+      // Truncate extremely large responses that might cause parsing issues
+      const maxLength = 500000; // 500KB limit
+      let processText = text.length > maxLength ? text.substring(0, maxLength) : text;
+      
+      // Strategy 1: Direct JSON parse
+      try {
+        return JSON.parse(processText);
+      } catch (err) {
+        console.warn('Direct JSON parse failed:', err);
+      }
+      
+      // Strategy 2: Extract JSON from markdown code blocks
+      const codeBlockMatch = processText.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
+      if (codeBlockMatch) {
+        try {
+          return JSON.parse(codeBlockMatch[1]);
+        } catch (err) {
+          console.warn('Code block JSON parse failed:', err);
+        }
+      }
+      
+      // Strategy 3: Find JSON object boundaries with better handling
+      const jsonStart = processText.indexOf('{');
+      let jsonEnd = -1;
+      
+      // Find the matching closing brace by counting braces
+      if (jsonStart !== -1) {
+        let braceCount = 0;
+        let inString = false;
+        let escaped = false;
+        
+        for (let i = jsonStart; i < processText.length; i++) {
+          const char = processText[i];
+          
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            escaped = true;
+            continue;
+          }
+          
+          if (char === '"' && !escaped) {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') braceCount++;
+            else if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                jsonEnd = i;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (jsonEnd !== -1) {
+          try {
+            const candidate = processText.slice(jsonStart, jsonEnd + 1);
+            return JSON.parse(candidate);
+          } catch (err) {
+            console.warn('Balanced brace extraction failed:', err);
+          }
+        }
+      }
+      
+      // Strategy 4: Try to fix common JSON issues with better cleaning
+      try {
+        let cleaned = processText
+          .replace(/^[^{]*/, '') // Remove text before first {
+          .replace(/[^}]*$/, '') // Remove text after last }
+          .replace(/\\n/g, '\\\\n') // Escape newlines in strings
+          .replace(/\\t/g, '\\\\t') // Escape tabs in strings
+          .replace(/\\r/g, '\\\\r') // Escape carriage returns
+          .trim();
+        
+        return JSON.parse(cleaned);
+      } catch (err) {
+        console.warn('Cleaned JSON parse failed:', err);
+      }
+      
+      throw new Error('Failed to parse JSON from response');
+    };
+
+    // Use updated model fallback sequence
+    const modelOrder = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let parsedContent: any = null;
     let lastErr: any = null;
 
+    // Optimized model attempts with faster fallback strategy
     for (const modelName of modelOrder) {
       try {
-        const mdl = genAI.getGenerativeModel({ model: modelName, generationConfig });
-        let result = await mdl.generateContent(prompt);
-        let resp = await result.response;
-        let trimmed = getResponseText(resp).trim();
+        console.log(`Attempting to use model: ${modelName}`);
+        
+        // Ultra-aggressive timeout for immediate fallback
+        const attemptWithTimeout = async (timeoutMs: number = 3000) => {
+          const startTime = Date.now();
+          console.log(`Starting ${modelName} attempt with ${timeoutMs}ms timeout`);
+          
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            console.log(`${modelName} timed out after ${timeoutMs}ms`);
+            controller.abort();
+          }, timeoutMs);
+          
+          try {
+            const mdl = genAI.getGenerativeModel({ model: modelName, generationConfig });
+            const result = await mdl.generateContent(prompt);
+            const resp = await result.response;
+            clearTimeout(timeoutId);
+            const elapsed = Date.now() - startTime;
+            console.log(`${modelName} completed in ${elapsed}ms`);
+            return getResponseText(resp).trim();
+          } catch (error: any) {
+            clearTimeout(timeoutId);
+            const elapsed = Date.now() - startTime;
+            console.log(`${modelName} failed after ${elapsed}ms:`, error.message);
+            throw error;
+          }
+        };
+        
+        let trimmed = await attemptWithTimeout(); // No retries for faster fallback
 
+        // If empty, try simplified JSON mode with timeout
         if (!trimmed) {
-          // Retry once without strict schema
-          const retryMdl = genAI.getGenerativeModel({
-            model: modelName,
-            generationConfig: { responseMimeType: 'application/json' }
-          });
-          const retryRes = await retryMdl.generateContent(prompt + '\nReturn only valid JSON for the object described above.');
-          const retryResp = await retryRes.response;
-          trimmed = getResponseText(retryResp).trim();
-        }
-
-        if (!trimmed) {
-          // Final plain-text attempt
-          const finalMdl = genAI.getGenerativeModel({ model: modelName });
-          const finalRes = await finalMdl.generateContent(prompt + '\nReturn only the JSON object defined above.');
-          const finalResp = await finalRes.response;
-          trimmed = getResponseText(finalResp).trim();
-        }
-
-        if (!trimmed) throw new Error('Empty response');
-
-        try {
-          parsedContent = JSON.parse(trimmed);
-        } catch {
-          const s = trimmed.indexOf('{');
-          const e = trimmed.lastIndexOf('}');
-          if (s !== -1 && e !== -1 && e > s) {
-            const candidate = trimmed.slice(s, e + 1);
-            parsedContent = JSON.parse(candidate);
-          } else {
-            throw new Error('Failed to parse blog JSON');
+          console.log(`${modelName}: Primary attempt empty, trying simplified mode`);
+          const simplifiedAttempt = async () => {
+            const startTime = Date.now();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+              console.log(`${modelName} simplified mode timed out`);
+              controller.abort();
+            }, 2000); // Ultra-short timeout for simplified attempt
+            
+            try {
+              const mdl = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: 'application/json' }
+              });
+              const result = await mdl.generateContent(prompt);
+              const resp = await result.response;
+              clearTimeout(timeoutId);
+              const elapsed = Date.now() - startTime;
+              console.log(`${modelName} simplified completed in ${elapsed}ms`);
+              return getResponseText(resp).trim();
+            } catch (error: any) {
+              clearTimeout(timeoutId);
+              const elapsed = Date.now() - startTime;
+              console.log(`${modelName} simplified failed after ${elapsed}ms:`, error.message);
+              throw error;
+            }
+          };
+          
+          try {
+            trimmed = await simplifiedAttempt();
+          } catch (err) {
+            console.log(`${modelName}: Simplified attempt failed, moving to next model`);
           }
         }
 
-        if (parsedContent) {
-          console.log(`Using model: ${modelName}`);
-          break;
+        if (!trimmed) {
+          throw new Error('Empty response');
         }
-      } catch (err) {
+
+        // Use enhanced JSON parsing
+        parsedContent = parseJsonResponse(trimmed);
+        
+        // Validate required fields
+        if (!parsedContent.title || !parsedContent.content) {
+          throw new Error('Missing required fields in parsed content');
+        }
+
+        console.log(`Successfully used model: ${modelName}`);
+        break;
+        
+      } catch (err: any) {
         lastErr = err;
-        console.warn(`Model failed: ${modelName}`, err);
+        const errorMsg = err?.message || 'Unknown error';
+        console.warn(`Model failed: ${modelName} - ${errorMsg}`);
         continue;
       }
     }
@@ -196,29 +405,27 @@ Please provide the response in the following JSON format:
       return NextResponse.json({ error: 'request failed , all models quota exceeded' }, { status: 429 });
     }
 
-    // Fetch related images with brand prompt
+    // Wait for image generation to complete (started earlier)
+    const rawImages = await imageGenerationPromise;
     let images: Array<{ url: string; alt: string; source?: string }> = [];
-    if (includeImages) {
-      const rawImages = await generateImagesViaGemini(topic);
-      
-      // Compress images to WebP format under 1MB each
-      if (rawImages.length > 0) {
-        try {
-          console.log(`Compressing ${rawImages.length} images to WebP format...`);
-          const imageUrls = rawImages.map(img => img.url);
-          const compressedUrls = await compressMultipleImages(imageUrls, 1024 * 1024); // 1MB limit
-          
-          images = rawImages.map((img, index) => ({
-            ...img,
-            url: compressedUrls[index] || img.url, // Fallback to original if compression fails
-            source: img.source + ' (compressed to WebP)'
-          }));
-          
-          console.log(`Successfully compressed ${images.length} images`);
-        } catch (error) {
-          console.error('Image compression failed, using original images:', error);
-          images = rawImages;
-        }
+    
+    if (rawImages.length > 0) {
+      try {
+        console.log(`Compressing ${rawImages.length} images to WebP format...`);
+        const imageUrls = rawImages.map(img => img.url);
+        // Use optimized batch compression with smaller batch size for faster processing
+        const compressedUrls = await compressMultipleImages(imageUrls, 1024 * 1024, 2); // 2 images at a time
+        
+        images = rawImages.map((img, index) => ({
+          ...img,
+          url: compressedUrls[index] || img.url, // Fallback to original if compression fails
+          source: img.source + ' (compressed to WebP)'
+        }));
+        
+        console.log(`Successfully compressed ${images.length} images`);
+      } catch (error) {
+        console.error('Image compression failed, using original images:', error);
+        images = rawImages;
       }
     }
 
@@ -256,6 +463,10 @@ Please provide the response in the following JSON format:
       }
     }
 
+    const endTime = Date.now();
+    const totalTime = endTime - startTime;
+    console.log(`Blog generation completed in ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
+    
     return NextResponse.json({
       title: parsedContent.title,
       content: parsedContent.content,
@@ -266,7 +477,8 @@ Please provide the response in the following JSON format:
       metadata: {
         estimatedSize: totalBlogSize,
         compressionApplied: images.some(img => img.source?.includes('compressed')),
-        imageCount: images.length
+        imageCount: images.length,
+        generationTimeMs: totalTime
       }
     });
 

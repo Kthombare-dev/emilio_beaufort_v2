@@ -5,17 +5,22 @@ import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await request.json();
     const { category } = body;
+    
+    console.log(`Starting blog ideas generation${category ? ` for category: "${category}"` : ''}`);
 
-         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-pro',
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
-            }
-          });
+    // Use fastest quality models first: gemini-2.5-flash, then gemini-2.5-pro, then predecessors
+    const modelOrder = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const generationConfig = {
+      responseMimeType: 'application/json',
+      responseSchema: { 
+        type: SchemaType.ARRAY as typeof SchemaType.ARRAY, 
+        items: { type: SchemaType.STRING as typeof SchemaType.STRING } 
+      }
+    };
 
                                        const prompt = `
 Generate 10 engaging blog post ideas for Emilio Beaufort, a luxury hair extensions company.
@@ -75,18 +80,38 @@ Make sure the titles are:
       ];
     };
 
+    // Optimized idea generation with faster models and timeouts
     const tryGenerateIdeas = async (): Promise<string[] | null> => {
-      const maxAttempts = 3;
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      for (const modelName of modelOrder) {
         try {
-          const result = await model.generateContent(prompt);
-          const response = await result.response;
-          const raw = response.text();
+          console.log(`Trying model: ${modelName}`);
+          const model = genAI.getGenerativeModel({ model: modelName, generationConfig });
+          
+          // Faster attempt with shorter timeout
+          const attemptWithTimeout = async (timeoutMs: number = 8000) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            
+            try {
+              const result = await model.generateContent(prompt);
+              const response = await result.response;
+              clearTimeout(timeoutId);
+              return response.text();
+            } catch (error) {
+              clearTimeout(timeoutId);
+              throw error;
+            }
+          };
+          
+          const raw = await attemptWithTimeout();
           const trimmed = (raw ?? '').toString().trim();
+          
           if (!trimmed) {
-            console.warn(`Gemini returned empty text on attempt ${attempt}`);
+            console.warn(`${modelName}: Empty response`);
             continue;
           }
+          
+          // Enhanced JSON parsing
           let parsed: unknown;
           try {
             parsed = JSON.parse(trimmed);
@@ -97,29 +122,49 @@ Make sure the titles are:
               const candidate = trimmed.slice(start, end + 1);
               parsed = JSON.parse(candidate);
             } else {
-              console.warn(`Failed to parse ideas JSON on attempt ${attempt}`);
+              console.warn(`${modelName}: Failed to parse JSON`);
               continue;
             }
           }
+          
           const ideas = sanitizeIdeas(parsed);
           if (ideas.length > 0) {
+            console.log(`Successfully generated ${ideas.length} ideas using ${modelName}`);
             return ideas;
           }
         } catch (err) {
-          console.warn(`Error generating ideas on attempt ${attempt}:`, err);
+          console.warn(`${modelName} failed:`, err);
+          continue;
         }
-        await new Promise(r => setTimeout(r, 300 * attempt));
       }
       return null;
     };
 
     const ideas = await tryGenerateIdeas();
+    const endTime = Date.now();
+    const totalTime = endTime - startTime;
+    
+    console.log(`Blog ideas generation completed in ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
+    
     if (ideas && ideas.length > 0) {
-      return NextResponse.json({ ideas });
+      return NextResponse.json({ 
+        ideas,
+        metadata: {
+          generationTimeMs: totalTime,
+          fallback: false
+        }
+      });
     }
 
     // Fallback to avoid 500s
-    return NextResponse.json({ ideas: buildFallbackIdeas(category), fallback: true });
+    console.log('Using fallback ideas due to API failures');
+    return NextResponse.json({ 
+      ideas: buildFallbackIdeas(category), 
+      metadata: {
+        generationTimeMs: totalTime,
+        fallback: true
+      }
+    });
 
   } catch (error) {
     console.error('Error generating blog ideas (outer catch):', error);

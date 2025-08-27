@@ -156,7 +156,7 @@ export default function AIBlogGenerationDialog({
         images: (generatedContent.images || []).map(i => i.url),
       });
       onOpenChange(false);
-      resetForm();
+      // resetForm() will be called automatically by the useEffect when dialog closes
     }
   };
 
@@ -173,18 +173,30 @@ export default function AIBlogGenerationDialog({
     setKeywords([]);
     setKeywordInput("");
     setTargetAudience("");
+    setIncludeImages(false);
     setGeneratedContent(null);
     setShowPreview(false);
     setShowIdeas(false);
     setBlogIdeas([]);
+    
+    // Reset loading states
+    setIsGenerating(false);
+    setIsLoadingIdeas(false);
   };
 
   useEffect(() => {
     if (!open) {
-      resetForm();
-      // Reset refs when dialog closes
+      // Cancel any ongoing operations
+      operationIdRef.current++;
+      
+      // Reset all refs and states
       isGeneratingIdeasRef.current = false;
       isGeneratingBlogRef.current = false;
+      
+      // Reset form and states
+      resetForm();
+      
+      console.log('AI Blog Generation Dialog closed - all processes reset');
     }
   }, [open]);
 
@@ -481,7 +493,11 @@ export default function AIBlogGenerationDialog({
                       Copy Content
                     </Button>
                     <Button
-                      onClick={() => setShowPreview(false)}
+                      onClick={() => {
+                        setShowPreview(false);
+                        setGeneratedContent(null);
+                        // Keep the form data but reset preview state
+                      }}
                       variant="outline"
                       className="flex items-center gap-2"
                     >
