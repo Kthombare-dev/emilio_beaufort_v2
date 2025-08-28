@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
     
     console.log(`Starting blog ideas generation${category ? ` for category: "${category}"` : ''}`);
 
-    // Use fastest quality models first: gemini-2.5-flash, then gemini-2.5-pro, then predecessors
-    const modelOrder = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Use Gemini 2.5 Pro as default with proper fallbacks
+    const modelOrder = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     const generationConfig = {
       responseMimeType: 'application/json',
       responseSchema: { 
@@ -87,18 +87,26 @@ Make sure the titles are:
           console.log(`Trying model: ${modelName}`);
           const model = genAI.getGenerativeModel({ model: modelName, generationConfig });
           
-          // Faster attempt with shorter timeout
-          const attemptWithTimeout = async (timeoutMs: number = 8000) => {
+          // Optimized attempt with faster timeout for better fallback
+          const attemptWithTimeout = async (timeoutMs: number = 6000) => {
+            const startTime = Date.now();
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            const timeoutId = setTimeout(() => {
+              console.log(`${modelName} timed out after ${timeoutMs}ms`);
+              controller.abort();
+            }, timeoutMs);
             
             try {
               const result = await model.generateContent(prompt);
               const response = await result.response;
               clearTimeout(timeoutId);
+              const elapsed = Date.now() - startTime;
+              console.log(`${modelName} completed in ${elapsed}ms`);
               return response.text();
-            } catch (error) {
+            } catch (error: any) {
               clearTimeout(timeoutId);
+              const elapsed = Date.now() - startTime;
+              console.log(`${modelName} failed after ${elapsed}ms:`, error.message);
               throw error;
             }
           };
@@ -111,18 +119,31 @@ Make sure the titles are:
             continue;
           }
           
-          // Enhanced JSON parsing
+          // Enhanced JSON parsing with better error handling
           let parsed: unknown;
           try {
             parsed = JSON.parse(trimmed);
-          } catch {
-            const start = trimmed.indexOf('[');
-            const end = trimmed.lastIndexOf(']');
-            if (start !== -1 && end !== -1 && end > start) {
-              const candidate = trimmed.slice(start, end + 1);
-              parsed = JSON.parse(candidate);
-            } else {
-              console.warn(`${modelName}: Failed to parse JSON`);
+          } catch (parseError) {
+            console.warn(`${modelName}: Direct JSON parse failed, trying extraction`);
+            try {
+              // Try to extract JSON array from response
+              const start = trimmed.indexOf('[');
+              const end = trimmed.lastIndexOf(']');
+              if (start !== -1 && end !== -1 && end > start) {
+                const candidate = trimmed.slice(start, end + 1);
+                parsed = JSON.parse(candidate);
+              } else {
+                // Try to extract from code blocks
+                const codeBlockMatch = trimmed.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+                if (codeBlockMatch) {
+                  parsed = JSON.parse(codeBlockMatch[1]);
+                } else {
+                  console.warn(`${modelName}: Failed to parse JSON`);
+                  continue;
+                }
+              }
+            } catch (extractError) {
+              console.warn(`${modelName}: JSON extraction failed:`, extractError);
               continue;
             }
           }
@@ -132,8 +153,11 @@ Make sure the titles are:
             console.log(`Successfully generated ${ideas.length} ideas using ${modelName}`);
             return ideas;
           }
-        } catch (err) {
-          console.warn(`${modelName} failed:`, err);
+        } catch (err: any) {
+          const errorMsg = err?.message || 'Unknown error';
+          console.warn(`${modelName} failed: ${errorMsg}`);
+          
+          // Skip to next model for faster fallback
           continue;
         }
       }
@@ -168,12 +192,16 @@ Make sure the titles are:
 
   } catch (error) {
     console.error('Error generating blog ideas (outer catch):', error);
-    return NextResponse.json({ ideas: [
-      'Luxury Hair Extensions: The Complete Care Handbook',
-      'Perfect Blend: Color Matching Extensions Made Easy',
-      'Top 7 Secrets for Seamless, Natural-Looking Extensions',
-      'How to Choose the Right Extension Method for You',
-      'From Day to Night: Chic Hairstyles with Extensions',
-    ], fallback: true });
+    return NextResponse.json({ 
+      error: 'Please try again later. Blog ideas generation service is temporarily unavailable.',
+      ideas: [
+        'Luxury Hair Extensions: The Complete Care Handbook',
+        'Perfect Blend: Color Matching Extensions Made Easy',
+        'Top 7 Secrets for Seamless, Natural-Looking Extensions',
+        'How to Choose the Right Extension Method for You',
+        'From Day to Night: Chic Hairstyles with Extensions',
+      ], 
+      fallback: true 
+    });
   }
 }

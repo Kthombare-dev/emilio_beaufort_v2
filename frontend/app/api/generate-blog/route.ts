@@ -213,7 +213,7 @@ Please provide the response in the following JSON format:
       if (!text) throw new Error('Empty response text');
       
       // Truncate extremely large responses that might cause parsing issues
-      const maxLength = 500000; // 500KB limit
+      const maxLength = 300000; // Reduced to 300KB to prevent memory issues
       let processText = text.length > maxLength ? text.substring(0, maxLength) : text;
       
       // Strategy 1: Direct JSON parse
@@ -233,17 +233,18 @@ Please provide the response in the following JSON format:
         }
       }
       
-      // Strategy 3: Find JSON object boundaries with better handling
+      // Strategy 3: Find JSON object boundaries with safer handling
       const jsonStart = processText.indexOf('{');
-      let jsonEnd = -1;
-      
-      // Find the matching closing brace by counting braces
       if (jsonStart !== -1) {
         let braceCount = 0;
         let inString = false;
         let escaped = false;
+        let jsonEnd = -1;
         
-        for (let i = jsonStart; i < processText.length; i++) {
+        // Limit search to prevent infinite loops on malformed JSON
+        const searchLimit = Math.min(processText.length, jsonStart + 200000);
+        
+        for (let i = jsonStart; i < searchLimit; i++) {
           const char = processText[i];
           
           if (escaped) {
@@ -283,7 +284,7 @@ Please provide the response in the following JSON format:
         }
       }
       
-      // Strategy 4: Try to fix common JSON issues with better cleaning
+      // Strategy 4: Try to fix common JSON issues with safer cleaning
       try {
         let cleaned = processText
           .replace(/^[^{]*/, '') // Remove text before first {
@@ -291,18 +292,37 @@ Please provide the response in the following JSON format:
           .replace(/\\n/g, '\\\\n') // Escape newlines in strings
           .replace(/\\t/g, '\\\\t') // Escape tabs in strings
           .replace(/\\r/g, '\\\\r') // Escape carriage returns
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
           .trim();
+        
+        // Additional safety check for reasonable JSON size
+        if (cleaned.length > 100000) {
+          cleaned = cleaned.substring(0, 100000);
+          // Try to find a complete JSON object within this limit
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (lastBrace > 0) {
+            cleaned = cleaned.substring(0, lastBrace + 1);
+          }
+        }
         
         return JSON.parse(cleaned);
       } catch (err) {
         console.warn('Cleaned JSON parse failed:', err);
       }
       
-      throw new Error('Failed to parse JSON from response');
+      // Strategy 5: Return fallback content to prevent complete failure
+      console.error('All JSON parsing strategies failed, returning fallback');
+      return {
+        title: 'Generated Blog Post',
+        content: '<p>Blog content could not be parsed properly. Please try again.</p>',
+        keywords: [],
+        tags: [],
+        summary: 'Blog generation encountered parsing issues.'
+      };
     };
 
-    // Use updated model fallback sequence
-    const modelOrder = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Use updated model fallback sequence with Gemini 2.5 Pro as default
+    const modelOrder = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let parsedContent: any = null;
     let lastErr: any = null;
 
@@ -311,8 +331,8 @@ Please provide the response in the following JSON format:
       try {
         console.log(`Attempting to use model: ${modelName}`);
         
-        // Ultra-aggressive timeout for immediate fallback
-        const attemptWithTimeout = async (timeoutMs: number = 3000) => {
+        // Optimized timeout for faster fallback
+        const attemptWithTimeout = async (timeoutMs: number = 5000) => {
           const startTime = Date.now();
           console.log(`Starting ${modelName} attempt with ${timeoutMs}ms timeout`);
           
@@ -349,7 +369,7 @@ Please provide the response in the following JSON format:
             const timeoutId = setTimeout(() => {
               console.log(`${modelName} simplified mode timed out`);
               controller.abort();
-            }, 2000); // Ultra-short timeout for simplified attempt
+            }, 3000); // Slightly longer timeout for simplified attempt
             
             try {
               const mdl = genAI.getGenerativeModel({
@@ -402,7 +422,9 @@ Please provide the response in the following JSON format:
 
     if (!parsedContent) {
       console.error('All models failed or quota exceeded:', lastErr);
-      return NextResponse.json({ error: 'request failed , all models quota exceeded' }, { status: 429 });
+      return NextResponse.json({ 
+        error: 'Please try again later. All AI models are currently unavailable.' 
+      }, { status: 503 });
     }
 
     // Wait for image generation to complete (started earlier)
@@ -485,8 +507,8 @@ Please provide the response in the following JSON format:
   } catch (error) {
     console.error('Error generating blog post:', error);
     return NextResponse.json(
-      { error: 'Failed to generate blog post' },
-      { status: 500 }
+      { error: 'Please try again later. Blog generation service is temporarily unavailable.' },
+      { status: 503 }
     );
   }
 }

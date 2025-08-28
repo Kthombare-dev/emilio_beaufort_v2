@@ -35,6 +35,8 @@ export default function AIBlogGenerationDialog({
   const [isLoadingIdeas, setIsLoadingIdeas] = useState(false);
   const [blogIdeas, setBlogIdeas] = useState<string[]>([]);
   const [showIdeas, setShowIdeas] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [ideasErrorMessage, setIdeasErrorMessage] = useState<string | null>(null);
 
   // Form state
   const [topic, setTopic] = useState("");
@@ -69,14 +71,23 @@ export default function AIBlogGenerationDialog({
     setIsLoadingIdeas(true);
     
     try {
+      setIdeasErrorMessage(null); // Clear any previous errors
       const ideas = await generateBlogIdeas();
       // Only update state if this is still the current operation
       if (currentOperationId === operationIdRef.current) {
         setBlogIdeas(ideas);
         setShowIdeas(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating ideas:", error);
+      if (currentOperationId === operationIdRef.current) {
+        const errorMsg = error?.message || 'Failed to generate blog ideas';
+        if (errorMsg.includes('try again later') || errorMsg.includes('unavailable')) {
+          setIdeasErrorMessage('Please try again later. Blog ideas service is temporarily unavailable.');
+        } else {
+          setIdeasErrorMessage('Failed to generate blog ideas. Please try again.');
+        }
+      }
     } finally {
       if (currentOperationId === operationIdRef.current) {
         setIsLoadingIdeas(false);
@@ -121,6 +132,7 @@ export default function AIBlogGenerationDialog({
     setIsGenerating(true);
     
     try {
+      setErrorMessage(null); // Clear any previous errors
       const request: BlogGenerationRequest = {
         topic: topic.trim(),
         tone,
@@ -136,8 +148,16 @@ export default function AIBlogGenerationDialog({
         setGeneratedContent(generated);
         setShowPreview(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating blog:", error);
+      if (currentOperationId === operationIdRef.current) {
+        const errorMsg = error?.message || 'Failed to generate blog post';
+        if (errorMsg.includes('try again later') || errorMsg.includes('unavailable')) {
+          setErrorMessage('Please try again later. All AI models are currently unavailable.');
+        } else {
+          setErrorMessage('Failed to generate blog post. Please try again.');
+        }
+      }
     } finally {
       if (currentOperationId === operationIdRef.current) {
         setIsGenerating(false);
@@ -182,6 +202,10 @@ export default function AIBlogGenerationDialog({
     // Reset loading states
     setIsGenerating(false);
     setIsLoadingIdeas(false);
+    
+    // Reset error messages
+    setErrorMessage(null);
+    setIdeasErrorMessage(null);
   };
 
   useEffect(() => {
@@ -248,6 +272,13 @@ export default function AIBlogGenerationDialog({
                   </Button>
                 </div>
               </div>
+
+              {/* Ideas Error Message */}
+              {ideasErrorMessage && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="text-red-800 text-sm">{ideasErrorMessage}</div>
+                </div>
+              )}
 
               {/* Blog Ideas */}
               {showIdeas && blogIdeas.length > 0 && (
@@ -360,11 +391,18 @@ export default function AIBlogGenerationDialog({
                 <Switch checked={includeImages} onCheckedChange={setIncludeImages} />
               </div>
 
+              {/* Error Message */}
+              {errorMessage && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="text-red-800 text-sm">{errorMessage}</div>
+                </div>
+              )}
+
               {/* Generate Button */}
               <Button
                 onClick={handleGenerateBlog}
                 disabled={isGenerating || !topic.trim()}
-                className="w-full h-12 text-base bg-purple-600 text-white hover:bg-purple-700"
+                className="w-full h-12 text-base bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
               >
                 {isGenerating ? (
                   <>
@@ -496,6 +534,7 @@ export default function AIBlogGenerationDialog({
                       onClick={() => {
                         setShowPreview(false);
                         setGeneratedContent(null);
+                        setErrorMessage(null); // Clear any errors when starting fresh
                         // Keep the form data but reset preview state
                       }}
                       variant="outline"
