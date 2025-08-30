@@ -108,8 +108,8 @@ export default function LocationsPage() {
         "Plot No. A31/1, Sarai Pipal Thala Extension,",
         "Adarsh Nagar, New Delhi – 110033, India",
       ],
-      email: "delhi.office@emiliobeaufort.com",
-      phone: "+91 9876543210",
+      email: "hello@emiliobeaufort.com",
+      phone: "+91 9051828718",
       mapsLink:
         "https://www.google.com/maps?q=Plot+No.+A31/1,+Sarai+Pipal+Thala+Extension,+New+Delhi",
     },
@@ -119,8 +119,8 @@ export default function LocationsPage() {
         "Varushbari Towers, Whitefield,",
         "Bengaluru – 560066, India",
       ],
-      email: "bengaluru.office@emiliobeaufort.com",
-      phone: "+91 9123456780",
+      email: "hello@emiliobeaufort.com",
+      phone: "+91 9051828718",
       mapsLink: "https://www.google.com/maps?q=Whitefield,+Bangalore",
     },
     {
@@ -129,8 +129,8 @@ export default function LocationsPage() {
         "Konnagara, Howrah,",
         "Kolkata – 711301, India",
       ],
-      email: "kolkata.office@emiliobeaufort.com",
-      phone: "+91 9988776655",
+      email: "hello@emiliobeaufort.com",
+      phone: "+91 9051828718",
       mapsLink: "https://www.google.com/maps?q=Konnagara,+Howrah,+Kolkata",
     },
   ];
