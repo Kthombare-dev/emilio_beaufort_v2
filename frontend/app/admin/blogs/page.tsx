@@ -262,7 +262,7 @@ function AdminBlogsPageContent() {
     setIsProcessing(true);
     try {
       const slug = title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      let updateData: any = {
+      const updateData: any = {
         title,
         content,
         slug,

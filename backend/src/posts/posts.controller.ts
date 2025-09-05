@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Header,
 } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { CreatePostDto, UpdatePostDto } from './dto';
@@ -20,11 +21,13 @@ export class PostsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=1800, stale-while-revalidate=59')
   findAll() {
     return this.postsService.findAll();
   }
 
   @Get(':slug')
+  @Header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=59')
   findBySlug(@Param('slug') slug: string) {
     return this.postsService.findBySlug(slug);
   }

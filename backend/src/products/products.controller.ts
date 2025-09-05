@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  Header,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto, UpdateProductDto } from './dto';
@@ -21,6 +22,7 @@ export class ProductsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=1800, stale-while-revalidate=59')
   findAll(@Query('category') category?: 'COSMETICS' | 'HAIR') {
     if (category) {
       return this.productsService.findByCategory(category);
@@ -29,6 +31,7 @@ export class ProductsController {
   }
 
   @Get('featured')
+  @Header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=59')
   findFeatured() {
     return this.productsService.findFeatured();
   }

@@ -15,14 +15,16 @@ import PerformanceMonitor from '@/components/PerformaceMonitor';
 const inter = Inter({ 
   subsets: ["latin"], 
   variable: "--font-inter",
-  display: 'swap', // Add this for better performance
+  display: 'swap', 
+  weight: ['400', '500', '600'], // Only load needed weights
   preload: true
 });
 
 const playfair = Playfair_Display({ 
   subsets: ["latin"], 
   variable: "--font-playfair",
-  display: 'swap', // Add this for better performance
+  display: 'swap',
+  weight: ['400', '700'], // Only load needed weights
   preload: true
 });
 
@@ -76,18 +78,15 @@ export default function RootLayout({
         {/* Preconnect to Google Fonts */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-
-        {/* Preconnect to Supabase storage (favicon + assets) */}
-        <link
-          rel="preconnect"
-          href="https://mzvuuvtckcimzemivltz.supabase.co"
-          crossOrigin=""
-        />
-        {/* Recommended final optimized set of preconnects */}
-        <link rel="preconnect" href="https://www.googletagmanager.com" />
-        <link rel="preconnect" href="https://www.google-analytics.com" />
-        <link rel="preconnect" href="https://checkout.razorpay.com" />
-        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+        <link rel="preconnect" href="https://mzvuuvtckcimzemivltz.supabase.co" crossOrigin="" />
+        {/* <!-- Google Tag Manager --> */}
+        <link rel="preconnect" href="https://www.googletagmanager.com" crossOrigin="" />
+        {/* <!-- Google Analytics --> */}
+        <link rel="preconnect" href="https://www.google-analytics.com" crossOrigin="" />
+        {/* <!-- Razorpay (only add if checkout is on this page) --> */}
+        <link rel="preconnect" href="https://checkout.razorpay.com" crossOrigin="" />
+        {/* <!-- Firebase Storage (only add if fetching images/files here) --> */}
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="" />
 
       </head>
       <body className={`${inter.variable} ${playfair.variable} bg-white text-gray-900 font-sans`}>
