@@ -83,16 +83,12 @@ export default function RootLayout({
           href="https://mzvuuvtckcimzemivltz.supabase.co"
           crossOrigin=""
         />
-
-        {/* Preconnect to analytics domains (if using GA / Vercel) */}
+        {/* Recommended final optimized set of preconnects */}
         <link rel="preconnect" href="https://www.googletagmanager.com" />
         <link rel="preconnect" href="https://www.google-analytics.com" />
-        {/* Add these for complete optimization */}
-        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
         <link rel="preconnect" href="https://checkout.razorpay.com" />
-        <link rel="preconnect" href="https://sheets.googleapis.com" />
-        <link rel="preconnect" href="https://encrypted-tbn0.gstatic.com" />
-        <link rel="preconnect" href="https://unpkg.com" />
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+
       </head>
       <body className={`${inter.variable} ${playfair.variable} bg-white text-gray-900 font-sans`}>
         {/* Inline script to silence console.log/info/debug/warn. Errors remain. */}
