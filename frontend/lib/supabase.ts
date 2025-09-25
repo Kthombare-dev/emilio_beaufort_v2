@@ -443,10 +443,15 @@ export const getImageUrl = (bucketName: string, path: string, format: 'webp' | '
   }
 
   try {
-    // Get the public URL directly from Supabase
+    // Get the public URL directly from Supabase. Use the official transform option for WebP.
+    const transformOptions =
+      format === 'webp'
+        ? { transform: { format: 'webp' as const, quality: 85 } }
+        : undefined;
+
     const { data } = supabase.storage
       .from(bucketName)
-      .getPublicUrl(path);
+      .getPublicUrl(path, transformOptions as any);
 
     console.log(`getImageUrl: Bucket: ${bucketName}, Path: ${path}, Data:`, data);
 
@@ -455,15 +460,8 @@ export const getImageUrl = (bucketName: string, path: string, format: 'webp' | '
       return '';
     }
 
-    // Ensure the URL is properly encoded and add cache-busting parameter
+    // Add cache-busting parameter to avoid stale images during updates
     const url = new URL(data.publicUrl);
-    
-    // Add WebP format transformation if requested
-    if (format === 'webp') {
-      url.searchParams.set('format', 'webp');
-      url.searchParams.set('quality', '85'); // Good quality with compression
-    }
-    
     url.searchParams.set('t', Date.now().toString());
     const finalUrl = url.toString();
     console.log(`getImageUrl: Final URL (${format}): ${finalUrl}`);
@@ -710,14 +708,20 @@ export const subscribeToPageViews = (callback: (payload: any) => void) => {
 };
 
 export const getPartnerImageUrl = (partnerName: string, imageName?: string, format: 'webp' | 'original' = 'webp') => {
-  // Special case for Aurélina London
-  if (partnerName.trim().toLowerCase() === 'aurélina london') {
-    const url = getImageUrl('partners-image', 'aurelina-london.jpg', format);
-    console.log(`Special case for Aurélina London (${format}): ${url}`);
-    return url;
-  }
-  // Default: normalize spaces and lowercase
-  const fileName = imageName || `${partnerName.replace(/\s+/g, '-').toLowerCase()}.jpg`;
+  // Normalize name: remove diacritics, trim, collapse spaces, lowercase
+  const normalizeName = (name: string) =>
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase();
+
+  const base = imageName ? imageName.replace(/\.(jpg|jpeg|png|webp)$/i, '') : normalizeName(partnerName);
+
+  // Default to .jpg path; format conversion is handled by getImageUrl via transform
+  const fileName = `${base}.jpg`;
   const url = getImageUrl('partners-image', fileName, format);
   console.log(`Partner: ${partnerName}, FileName: ${fileName}, URL (${format}): ${url}`);
   return url;
